@@ -1,0 +1,1634 @@
+---
+title: "Main_pipeline"
+author: "Andrea,Gloria,Lorenzo,Thomas"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Preparatory steps
+  Loading packages
+  Store package names in a vectors for ease of access and to load them easily 
+```{r Setup, message=FALSE, warning=FALSE}
+
+# Define a list of packages to be loaded
+PACKAGES <- c(
+  "sva",
+  "tidyverse",
+  "dplyr",
+  "readxl",
+  "ggplot2",
+  "stringr",
+  "edgeR",
+  "DESeq2",
+  "plotly",
+  "factoextra",
+  "cluster",
+  #"cmake",
+  "RColorBrewer",
+  "clusterProfiler",
+  "biomaRt",
+  "org.Hs.eg.db"
+  
+)
+# Load the specified packages
+invisible(lapply(PACKAGES, library, character.only = TRUE))
+```
+
+# Load the datasets 
+
+```{r Load datasets,message=FALSE, warning=FALSE}
+
+# Set the working directory to the specified path by user
+setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
+
+# Upload human-specific genes from the Excel file 'Human-specific.xlsx'
+Human_genes <- readxl::read_xlsx('Human-specific.xlsx')
+
+# Load the Tumor dataset from the 'Tumor_dataframe.csv' file
+Tumor <- read.csv('Tumor_dataframe.csv', sep = ',', header = TRUE)
+
+# Load the Control dataset from the 'Controls.csv' file
+Control <- read.csv('Controls.csv', sep = ',', header = TRUE)
+
+
+```
+
+# Batch effect correction
+    A statistical technique mitigating systematic variations ("batch effects") in data analysis, commonly used in genomics.
+    It minimizes artifacts introduced during data collection, enhancing accuracy and ensuring more reliable results in
+    biological research.
+    
+```{r Preprocessinging for Batch, message=FALSE, warning=FALSE}
+# Identify duplicated ensembl_gene_id in the Tumor dataset
+duplicato <- Tumor$ensembl_gene_id[duplicated(Tumor$ensembl_gene_id)]
+
+# Remove less informative rows by keeping the first occurrence of each ensembl_gene_id
+Tumor <- distinct(Tumor, ensembl_gene_id, .keep_all = TRUE)
+
+# Convert relevant columns of Tumor and Control datasets to matrices
+Tumor_2 <- as.matrix(sapply(Tumor[2:641], as.numeric))
+Control_2 <- as.matrix(sapply(Control[2:31], as.numeric))
+
+# Reshape the Control dataset using tidyr::gather
+PreCombat_control_df <- tidyr::gather(as.data.frame(Control_2), key = 'sample', value = 'read_number')
+
+# Subset and reshape the first 20 columns of the Tumor dataset using tidyr::gather
+PreCombat_tumor_df_subset <- tidyr::gather(as.data.frame(Tumor_2)[1:20], key = 'sample', value = 'read_number')
+
+#creation of batch for tumor and control, so creation of the vectors for batch separation 
+batch_tumor <- c(rep(1,38),rep(2,173),rep(3,321),rep(4,108))
+batch_control <- c(rep(1,10),rep(2,20))
+
+# Create a boxplot for the Control dataset before Combat correction
+jpeg(filename = '../images/control_Pre_Combat_boxplot.jpeg')
+
+ggplot() +
+  geom_boxplot(
+    colour = 'darkgreen',
+    fill = 'olivedrab',
+    alpha = 0.7,
+    mapping = aes(sample, read_number + 1),
+    data = PreCombat_control_df
+  ) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+
+dev.off()
+
+# Create a boxplot for a subset of 20 samples from the Tumor dataset before Combat correction
+jpeg(filename = '../images/tumor_Pre_Combat_boxplot_subset.jpeg')
+
+ggplot() +
+  geom_boxplot(
+    colour = 'darkred',
+    fill = 'indianred',
+    alpha = 0.5,
+    mapping = aes(sample, read_number + 1),
+    data = PreCombat_tumor_df_subset,
+    width = 0.5
+  ) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+
+dev.off()
+
+```
+
+```{r Application of Batch,message=FALSE, warning=FALSE}
+
+# Creation of batches for tumor and control datasets
+batch_tumor <- c(rep(1, 38), rep(2, 173), rep(3, 321), rep(4, 108))
+batch_control <- c(rep(1, 10), rep(2, 20))
+
+# Application of Combat-Seq and creation of adjusted dataframes
+tumor_adjusted <- as.data.frame(ComBat_seq(Tumor_2, batch = batch_tumor, group = NULL))
+control_adjusted <- as.data.frame(ComBat_seq(Control_2, batch = batch_control, group = NULL))
+
+# Adding the ensembl_gene_id column to the adjusted control dataframe
+control_adjusted <- add_column(control_adjusted, 'ensembl_gene_id' = Control$ensembl_gene_id, .before = 'X817_T')
+
+# Adding the ensembl_gene_id column to the adjusted tumor dataframe
+tumor_adjusted <- add_column(tumor_adjusted, 'ensembl_gene_id' = Tumor$ensembl_gene_id, .before = 'ALL33')
+
+```
+
+# Normalization with edgeR package, DGE list and CPM
+
+  - TMM method: Normalization method intra and inter-sample and we create CPM matrices 
+  - DGE list: Curated genes with significant expression changes between experimental conditions.
+  - CPM (Counts Per Million): Normalized measure of gene expression, facilitating comparisons across samples by accounting
+    for sequencing depth variations.
+  
+```{r Preprocessinging ,message=FALSE, warning=FALSE}
+
+# Filter tumor_adjusted dataset for human-specific genes
+HSgenes_tumor <- tumor_adjusted %>% dplyr::filter(tumor_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`)
+# Result: 603 out of 873 human-specific genes present in the tumor dataset
+
+# Filter control_adjusted dataset for human-specific genes
+HSgenes_control <- control_adjusted %>% dplyr::filter(control_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`)
+# Result: 498 out of 873 human-specific genes present in the control dataset
+
+# Set dataframes for easier use
+control_adjusted1 <- control_adjusted %>% column_to_rownames('ensembl_gene_id')
+tumor_adjusted1 <- tumor_adjusted %>% column_to_rownames('ensembl_gene_id')
+
+# Prepare data for boxplot comparison before normalization
+Pre_control_df <- tidyr::gather(control_adjusted1, key = 'sample', value = 'read_number')
+Pre_tumor_df_subset <- tidyr::gather(tumor_adjusted1[1:20], key = 'sample', value = 'read_number')
+
+# Create a boxplot for the Control dataset before TMM normalization
+jpeg(filename = '../images/control_Pre_TMM_boxplot.jpeg')
+ggplot() +
+  geom_boxplot(colour = 'darkgreen', fill = 'olivedrab', alpha = 0.7, mapping = aes(sample, read_number + 1), data = Pre_control_df) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+dev.off()
+
+# Create a boxplot for a subset of 20 samples from the Tumor dataset before TMM normalization
+jpeg(filename = '../images/tumor_Pre_TMM_boxplot_subset.jpeg')
+ggplot() +
+  geom_boxplot(colour = 'darkred', fill = 'indianred', alpha = 0.5, mapping = aes(sample, read_number + 1), data = Pre_tumor_df_subset, width = 0.5) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+dev.off()
+
+```
+
+```{r DGEList object and CPM table,message=FALSE, warning=FALSE}
+
+# Create DGEList objects for control and tumor datasets
+edge_c_control <- DGEList(counts = control_adjusted1)
+edge_c_tumor <- DGEList(counts = tumor_adjusted1)
+
+# Normalize using the edgeR package with the TMM method
+# This method applies both inter- and intra-sample normalization for controls and tumors
+edge_n_control <- calcNormFactors(edge_c_control, method = 'TMM') 
+edge_n_tumor <- calcNormFactors(edge_c_tumor, method = 'TMM')
+
+# Create a CPM table with normalized expression values
+CPM_control <- as.data.frame(round(cpm(edge_n_control), 2))
+CPM_tumor <-  as.data.frame(round(cpm(edge_n_tumor), 2))
+
+# Reshape the CPM tables for easier visualization
+CPM_control_df <- tidyr::gather(CPM_control, key = 'sample', value = 'CPM')
+CPM_tumor_df <- tidyr::gather(CPM_tumor, key = 'sample', value = 'CPM')
+
+# Save the CPM tables as CSV files (uncomment if needed)
+# write.csv(CPM_tumor, file = 'CPM_Tumor_dataframe.csv', row.names = TRUE)
+# write.csv(CPM_control, file = 'CPM_Control_dataframe.csv', row.names = TRUE)
+
+```
+
+```{r Boxplot CPM,message=FALSE, warning=FALSE}
+
+# Reshape the CPM table for plotting by gathering the first 20 samples
+CPM_tumor_df_toplot <- tidyr::gather(CPM_tumor[1:20], key = 'sample', value = 'CPM')
+
+# Create a boxplot for the Control dataset after TMM normalization
+jpeg(filename = '../images/control_TMM_boxplot.jpeg')
+ggplot() +
+  geom_boxplot(colour = 'darkgreen', fill = 'olivedrab', alpha = 0.7, mapping = aes(sample, CPM + 1), data = CPM_control_df) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+dev.off()
+
+# Create a boxplot for a subset of 20 samples from the Tumor dataset after TMM normalization
+jpeg(filename = '../images/tumor_TMM_boxplot_subset.jpeg')
+ggplot() +
+  geom_boxplot(colour = 'darkred', fill = 'indianred', alpha = 0.5, mapping = aes(sample, CPM + 1), data = CPM_tumor_df_toplot, width = 0.5) +
+  theme_bw() +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_log10()
+dev.off()
+
+```
+
+# Differential gene expression analysis
+
+  Differential gene expression analysis: Identifies genes with significant expression changes between experimental
+  conditions, revealing molecular insights into biological processes or treatments.
+
+```{r Preprocessing,message=FALSE, warning=FALSE}
+
+# Merge control_adjusted and tumor_adjusted datasets by 'ensembl_gene_id'
+total_adjusted <- merge(control_adjusted, tumor_adjusted, by = 'ensembl_gene_id')
+total_adjusted1 <- total_adjusted %>% column_to_rownames('ensembl_gene_id')
+
+# Create a dataframe containing information on the samples for DGE
+info_sample_1 <- data.frame("sample" = colnames(total_adjusted1))
+rownames(info_sample_1) <- info_sample_1$sample
+info_sample_2 <- as.data.frame(str_split(string = info_sample_1$sample, pattern = "_", simplify = TRUE))
+colnames(info_sample_2) <- c("condition", "replicate")
+info_samples <- cbind(info_sample_1, info_sample_2[1:2])
+info_samples$condition <- c(rep("H", 30), rep("T", 640))
+info_samples$replicate <- c(rep(1, 670))
+
+# Create a new dataframe for info_samples to use for filtering 0 values from the dataset
+info_samples_new_cond <- info_samples
+info_samples_new_cond$condition <- "AT"
+info_samples_new_cond$condition[1:10] <- "PH"
+info_samples_new_cond$condition[11:30] <- "AH"
+info_samples_new_cond$condition[31:562] <- 'PT'
+info_samples_new_cond$condition[info_samples_new_cond$sample %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- "PT"
+
+# Define thresholds for filtering
+median_thr <- 5
+cond_tresh <- 0.5
+
+# Create a filter vector based on the maximum median expression per condition
+filter_vec <- apply(total_adjusted1, 1, function(y) max(by(y, info_samples_new_cond$condition, function(x) median(x >= median_thr))))
+
+# Filter the counts dataframe based on the condition threshold
+filter_counts_df <- total_adjusted1[filter_vec >= cond_tresh, ]
+
+```
+
+```{r create new DGEList object and calculate DEGs,message=FALSE, warning=FALSE}
+
+# Create a DGEList object with filtered counts and group information
+edge_c_total <- DGEList(counts = filter_counts_df, group = info_samples$condition, samples = info_samples, genes = filter_counts_df)
+edge_n_total <- calcNormFactors(edge_c_total, method = 'TMM')
+
+# Create a CPM table with normalized expression values
+cpm_table <- as.data.frame(round(cpm(edge_n_total), 2))  # The library size is scaled by the normalization factor
+
+# Define the experimental design matrix
+# We build a model with no intercept and have two variables, one for each condition (1 for control and 2 for tumor)
+design <- model.matrix(~0 + group, data = edge_n_total$samples)
+colnames(design) <- levels(edge_n_total$samples$group)
+rownames(design) <- edge_n_total$samples$sample
+
+# Calculate dispersion and fit the result with edgeR (necessary for differential expression analysis)
+edge_d_total <- estimateDisp(edge_n_total, design)
+
+# Fit the data using a negative binomial distribution
+edge_f <- glmQLFit(edge_d_total, design)
+
+# Definition of the contrast (conditions to be compared)
+contro <- makeContrasts("T-H", levels = design)
+
+# Fit the model with generalized linear models
+edge_t <- glmQLFTest(edge_f, contrast = contro)
+
+# Extract the top 20 differentially expressed genes (DEGs) based on p-value and log fold change
+DEGs <- as.data.frame(topTags(edge_t, n = 18203, p.value = 0.01, sort.by = "logFC"))
+
+# Add a new column to the DEGs dataframe called 'class'
+# Used to express the values of the fold change of the transcripts
+# Selection based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases)
+DEGs$class <- '='
+DEGs$class[which(DEGs$logCPM > 1 & DEGs$logFC > 1.5)] = '+'
+DEGs$class[which(DEGs$logCPM > 1 & DEGs$logFC < (-1.5))] = '-'
+DEGs <- DEGs[order(DEGs$logFC, decreasing = TRUE),]  # Order based on the fold change
+
+# Display the distribution of class labels in DEGs
+table(DEGs$class)
+
+```
+
+```{r HS DEGs,message=FALSE, warning=FALSE}
+# Filter DEGs for human-specific genes
+DEGs_Hsgenes <- DEGs %>% dplyr::filter(rownames(DEGs) %in% Human_genes$`Ensembl ID`)
+Up_HSgenes <- DEGs[DEGs$class == '+', ] %>% dplyr::filter(rownames(DEGs[DEGs$class == '+', ]) %in% Human_genes$`Ensembl ID`)
+Down_HSgenes <- DEGs[DEGs$class == '-', ] %>% dplyr::filter(rownames(DEGs[DEGs$class == '-', ]) %in% Human_genes$`Ensembl ID`)
+
+# Display the distribution of class labels in DEGs_Hsgenes
+table(DEGs_Hsgenes$class)
+
+```
+
+```{r Plots all DEGs,message=FALSE, warning=FALSE}
+# Display a volcano plot for all DEGs
+jpeg(filename = '../images/Volcano_plot_DEGs.jpeg')
+
+# Set up plot parameters
+par(fig = c(0, 1, 0, 1), mar = c(4, 4, 1, 2), mgp = c(2, 0.75, 0))
+
+# Plot the volcano plot with log FoldChange on the x-axis and -log10 p-value on the y-axis
+plot(
+  DEGs$logFC, -log(DEGs$PValue, base = 10),
+  xlab = "log2 FC control vs case", ylab = "-log10 p-value",
+  col = ifelse(DEGs$class == "=", "grey70", "olivedrab4"),
+  pch = 20, frame.plot = TRUE, cex = 0.8, main = "Volcano plot"
+) %>%
+  # Add a vertical dashed line at log FoldChange = 0
+  abline(v = 0, lty = 2, col = "grey20")
+
+# Save the plot
+dev.off()
+
+# Set up colors for conditions in the heatmap
+col <- rep('chartreuse4', 670)
+col[which(info_samples$condition == 'T')] <- 'burlywood3'
+pal <- c('blue', 'white', 'red')
+pal <- colorRampPalette(pal)(670)
+
+# Create a heatmap for all DEGs
+DEGs_selected <- DEGs %>% dplyr::filter(DEGs$class != '=')
+jpeg(filename = '../images/Heatmap_plot_DEGs.jpeg')
+heatmap(
+  as.matrix(cpm_table[which(rownames(cpm_table) %in% rownames(DEGs_selected)), ]),
+  ColSideColors = col, cexCol = 0.5, margins = c(4, 4), col = pal, cexRow = 0.2
+)
+dev.off()
+
+# For improving the clusterization, set the cpm table as logarithmic
+cpm_table_log <- as.data.frame(round(log10(cpm(edge_n_total) + 1), 2))
+
+# Save the logarithmic cpm table
+# write.csv(cpm_table_log, file = 'Acute_lymphoide_leukemia_cpm_log_expression_table.csv', row.names = TRUE)
+
+# Read the saved logarithmic cpm table (if needed)
+# moment1 <- read.csv('Acute_lymphoide_leukemia_cpm_log_expression_table.csv')
+# moment1 <- moment1 %>% column_to_rownames('gene_names')
+# write.csv(moment1, file = 'Acute_lymphoide_leukemia_cpm_log_expression_table.csv')
+
+# Create a heatmap with the logarithmic cpm table for all DEGs
+jpeg(filename = '../images/Heatmap_plot_DEGs_log.jpeg')
+heatmap(
+  as.matrix(cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)), ]),
+  ColSideColors = col, cexCol = 0.5, margins = c(4, 4), col = pal, cexRow = 0.2
+)
+dev.off()
+
+```
+
+```{r Plot HS DEGs,message=FALSE, warning=FALSE}
+# Display a volcano plot for DEGs related to human-specific genes
+jpeg(filename = '../images/Volcano_plot_DEGsHS.jpeg')
+
+# Set up plot parameters
+par(fig = c(0, 1, 0, 1), mar = c(4, 4, 1, 2), mgp = c(2, 0.75, 0))
+
+# Plot the volcano plot with log FoldChange on the x-axis and -log10 p-value on the y-axis
+plot(
+  DEGs_Hsgenes$logFC, -log(DEGs_Hsgenes$PValue, base = 10),
+  xlab = "log2 FC control vs case", ylab = "-log10 p-value",
+  col = ifelse(DEGs_Hsgenes$class == "=", "grey70", "olivedrab4"),
+  pch = 20, frame.plot = TRUE, cex = 0.8, main = "Volcano plot"
+) %>%
+  # Add a vertical dashed line at log FoldChange = 0
+  abline(v = 0, lty = 2, col = "grey20")
+
+# Save the plot
+dev.off()
+
+# Set up colors for conditions in the heatmap
+col <- rep('chartreuse4', 670)
+col[which(info_samples$condition == 'T')] <- 'burlywood3'
+pal <- c('blue', 'white', 'red')
+pal <- colorRampPalette(pal)(670)
+
+# Create a heatmap for DEGs related to human-specific genes
+DEGs_selected <- DEGs_Hsgenes %>% dplyr::filter(DEGs_Hsgenes$class != '=')
+jpeg(filename = '../images/Heatmap_plot_DEGsHS.jpeg')
+heatmap(
+  as.matrix(cpm_table[which(rownames(cpm_table) %in% rownames(DEGs_selected)), ]),
+  ColSideColors = col, cexCol = 0.5, margins = c(4, 4), col = pal, cexRow = 0.2
+)
+dev.off()
+
+# Set up a logarithmic cpm table for the heatmap
+cpm_table_log <- as.data.frame(round(log10(cpm(edge_n_total) + 1), 2))
+
+# Create a heatmap with the logarithmic cpm table for DEGs related to human-specific genes
+jpeg(filename = '../images/Heatmap_plot_DEGs_logHS.jpeg')
+heatmap(
+  as.matrix(cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)), ]),
+  ColSideColors = col, cexCol = 0.5, margins = c(4, 4), col = pal, cexRow = 0.2
+)
+dev.off()
+
+
+```
+
+# PCA analysis
+It's a dimensionality reduction technique used in data analysis to transform high-dimensional data into a lower-dimensional space. PCA identifies patterns and captures the most significant variations in the data, aiding visualization and highlighting key features. This is particularly valuable for exploring and understanding complex datasets.
+
+```{r Preprocessinging,message=FALSE, warning=FALSE}
+
+# Extract differentially expressed genes (non-'=' class) from DEGs
+Diff_expressed <- DEGs[which(DEGs$class != '='), ]
+
+# Subset the logarithmic cpm table for PCA analysis
+PCA_cpm_log_nonHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed)), ]
+PCA_cpm_log <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)), ]
+
+# Filter rows and columns with zero variance for PCA
+PCA_cpm_log_filtered <- PCA_cpm_log[, which(apply(PCA_cpm_log, 2, var) != 0)]
+PCA_cpm_log_filtered <- PCA_cpm_log_filtered[which(apply(PCA_cpm_log_filtered, 1, var) != 0), ]
+
+# Filter rows and columns with zero variance for PCA (non-human-specific genes)
+PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[, which(apply(PCA_cpm_log_nonHS, 2, var) != 0)]
+PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[which(apply(PCA_cpm_log_nonHS, 1, var) != 0), ]
+
+# Set up colors for conditions in PCA
+color <- c(rep('darkgreen', 30), rep('indianred', 640))
+
+```
+
+```{r PCA all DEGs plot,message=FALSE, warning=FALSE}
+
+# Perform PCA on the logarithmic cpm table for DEGs with non-'=' class
+data.PC <- prcomp(t(PCA_cpm_log_filtered), scale. = TRUE)
+
+# Create a PCA plot for the first two principal components
+jpeg(filename = '../images/PCA_plot_DEGs_log_HS.jpeg')
+plot(data.PC$x[, 1:2], col = color, pch = 19)
+dev.off()
+
+# Perform PCA on the logarithmic cpm table for non-human-specific genes
+data.PC_nonHG <- prcomp(t(PCA_cpm_log_nonHS_filtered), scale. = TRUE)
+
+# Create a PCA plot for the first two principal components (non-human-specific genes)
+plot(data.PC_nonHG$x[, 1:2], col = color, pch = 19)
+
+
+```
+
+```{r PCA Tumor only plot,message=FALSE, warning=FALSE}
+
+# Perform PCA on the logarithmic cpm table for DEGs with non-'=' class (tumor only)
+data.PC.tumor <- prcomp(t(PCA_cpm_log_filtered[31:670]), scale. = TRUE)
+
+# Create a PCA plot for the first two principal components (tumor only)
+jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
+plot(data.PC.tumor$x[, 1:2], pch = 19)
+dev.off()
+
+# Perform PCA on the logarithmic cpm table for non-human-specific genes (tumor only)
+data.PC_nonHG_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[31:670]), scale. = TRUE)
+
+# Create a PCA plot for the first two principal components (non-human-specific genes, tumor only)
+plot(data.PC_nonHG_tumor$x[, 1:2], pch = 19)
+
+```
+
+# PAM Partitioning around medoids
+A clustering algorithm used in data analysis. PAM is an extension of the k-medoids algorithm that identifies representative data points (medoids) as cluster centers. It partitions data into clusters based on the similarity of observations to these medoids rather than centroids, making it robust to outliers. PAM is widely employed in cluster analysis for grouping data points with similar characteristics.
+
+```{r PAM k tuning,message=FALSE, warning=FALSE}
+
+# Determine the number of clusters using different methods for control-tumor analysis
+# 1. Elbow method
+fviz_nbclust(data.PC$x, FUNcluster = cluster::pam, k.max = 10)
+
+# 2. Gap statistic method with classic theme
+fviz_nbclust(data.PC$x, FUNcluster = cluster::pam, k.max = 10, method = 'gap_stat') + theme_classic()
+
+# 3. Within-sum-of-squares (wss) method
+fviz_nbclust(data.PC$x, FUNcluster = cluster::pam, k.max = 10, method = "wss")
+
+# Determine the number of clusters for subtypes of tumors
+# 1. Elbow method
+fviz_nbclust(data.PC.tumor$x, FUNcluster = cluster::pam, k.max = 15)
+
+# 2. Gap statistic method with classic theme
+fviz_nbclust(data.PC.tumor$x, FUNcluster = cluster::pam, k.max = 15, method = 'gap_stat') + theme_classic()
+
+# 3. Within-sum-of-squares (wss) method
+fviz_nbclust(data.PC.tumor$x, FUNcluster = cluster::pam, k.max = 15, method = "wss")
+
+# Determine the number of clusters for control-tumor analysis (no HS genes)
+# 1. Elbow method
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 10)
+
+# 2. Gap statistic method with classic theme
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 10, method = 'gap_stat') + theme_classic()
+
+# 3. Within-sum-of-squares (wss) method
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 10, method = "wss")
+
+# Determine the number of clusters for subtypes of tumors (no HS genes)
+# 1. Elbow method
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 15)
+
+# 2. Gap statistic method with classic theme
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 15, method = 'gap_stat') + theme_classic()
+
+# 3. Within-sum-of-squares (wss) method
+fviz_nbclust(data.PC_nonHG_tumor$x, FUNcluster = cluster::pam, k.max = 15, method = "wss")
+
+```
+
+```{r Perform PAM clustering ,message=FALSE, warning=FALSE}
+
+# Perform PAM clustering on control-tumor analysis
+pam1 <- eclust(data.PC$x, "pam", k = 9)
+pam1_nonHS <- eclust(data.PC_nonHG$x, 'pam', k = 9)
+
+# Perform PAM clustering on tumor subtypes
+pam2 <- eclust(data.PC.tumor$x, "pam", k = 8)
+pam2_nonHS <- eclust(data.PC_nonHG_tumor$x, 'pam', k = 8)
+
+```
+
+# Hierarchical clustering
+A clustering method in data analysis that organizes data into a tree-like structure based on similarity. It builds a hierarchy of clusters, starting with individual data points and progressively merging them into larger groups. Hierarchical clustering can be agglomerative (bottom-up) or divisive (top-down), offering insights into relationships and structure within the dataset. This method is valuable for exploring and visualizing hierarchical patterns in diverse datasets.
+
+```{r Apply hierarchical clustering,message=FALSE, warning=FALSE}
+# Calculate distances between observations and create a simple dendrogram for control-tumor analysis
+dm <- dist(data.PC$x)
+hc <- hclust(dm, method = 'average')
+plot(hc, hang = -1)
+rect.hclust(hc, k = 2, border = 'red')  # Highlight clusters with a red border
+clust.vec.2 <- cutree(hc, k = 2)
+fviz_cluster(list(data = data.PC$x, cluster = clust.vec.2))  # Visualize clustering using the 'factoextra' package
+
+# Repeat the process for tumor subtypes
+dm2 <- dist(data.PC.tumor$x)
+hc2 <- hclust(dm2, method = 'average')
+plot(hc2, hang = -1)
+rect.hclust(hc2, k = 2, border = 'red')
+clust.vec <- cutree(hc2, k = 8)
+fviz_cluster(list(data = data.PC.tumor$x, cluster = clust.vec))
+
+```
+
+# Combining PCA and PAM
+Merging PCA and PAM enhances the interpretation of high-dimensional data by reducing noise and revealing meaningful clusters, providing a comprehensive approach to exploratory data analysis.
+- We unified the preprocessing with the plot function to improve readability 
+
+```{r Plot for Tumor only,message=FALSE, warning=FALSE}
+
+# Create a dataframe from PAM clustering results
+clusterino_pam2 <- as.data.frame((pam2$clustering))
+components <- data.PC.tumor[["x"]]
+components <- data.frame(components)
+components <- cbind(components, clusterino_pam2)
+components$PC2 <- -components$PC2
+
+# Convert cluster information to a factor for plotting
+components$`(pam2$clustering)` <- as.factor(components$`(pam2$clustering)`)
+
+# Create an interactive 3D scatter plot using Plotly
+fig_Tumor <- plot_ly(components, x =~ PC1, y =~ PC2, z =~ PC3, color = components$`(pam2$clustering)`,
+                colors = brewer.pal(n = 8, name = "RdBu"), mode = 'markers', marker = list(size = 4))
+fig_Tumor
+
+```
+
+```{r Plot for non-HS,message=FALSE, warning=FALSE}
+
+# Create a dataframe from PAM clustering results for non-HS
+clusterino_pam2_nonHS <- as.data.frame((pam2_nonHS$clustering))
+components_nonHS <- data.PC_nonHG_tumor$x
+components_nonHS <- cbind(components_nonHS, clusterino_pam2_nonHS)
+components_nonHS$PC2 <- -components_nonHS$PC2
+components_nonHS$`(pam2_nonHS$clustering)` <- as.factor(components_nonHS$`(pam2_nonHS$clustering)`)
+
+# Create an interactive 3D scatter plot using Plotly for non-HS
+fig_nonHS <- plot_ly(components_nonHS, x =~ PC1, y =~ PC2, color = clusterino_pam2_nonHS$`(pam2_nonHS$clustering)`,
+                    colors = c('cadetblue1', 'red', 'chartreuse3', 'blueviolet', 'blue4', 'darkgoldenrod2', 'darksalmon', 'seagreen4'),
+                    type = 'scatter', mode = 'markers')
+
+# Create another 3D scatter plot with the same data for non-HS
+fig2_nonHS <- plot_ly(components_nonHS, x =~ PC1, y =~ PC2, z =~ PC3, color = components_nonHS$`(pam2_nonHS$clustering)`,
+                     colors = brewer.pal(n = 8, name = "RdBu"), mode = 'markers', marker = list(size = 4))
+
+
+```
+
+```{r Pediatric vs adult all nonHS ,message=FALSE, warning=FALSE}
+
+# Add a new column 'type' to clusterino_pam2, initially labeled as 'pediatric'
+clusterino_pam2$type <- 'pediatric'
+
+# Assign 'adult' to rows 533:640 in the 'type' column
+clusterino_pam2$type[533:640] <- 'adult'
+
+# Adjust 'type' for specific rows based on gene names
+clusterino_pam2$type[rownames(clusterino_pam2) %in% c('CMUTALLS4', 'T59', 'T91', 'T89', 'T87', 'T82', 'T81', 'T74', 'T59', 'T112', 'T102', 'SIHTALLS32', 'SIHTALLS25', 'SIHTALLS12', 'H301TALLS3', 'H301TALLS13', 'H301TALLS11', 'CMUTALLS9', 'CMUTALLS13', 'T67', 'T77', 'T103')] <- 'pediatric'
+
+# Create a dataframe 'components2' using the PC coordinates and 'clusterino_pam2' information
+components2 <- as.data.frame(data.PC.tumor$x)
+components2 <- cbind(components2, clusterino_pam2)
+components2$PC2 <- -components2$PC2
+
+# Create an interactive scatter plot for 'type' using PC1 and PC2
+fig3 <- plot_ly(components2, x =~ PC1, y =~ PC2, color = clusterino_pam2$type, colors = c('red2', 'blue4'), type = 'scatter', mode = 'markers')
+
+# Create an interactive 3D scatter plot for 'type' using PC1, PC2, and PC3
+fig4 <- plot_ly(components2, x =~ PC1, y =~ PC2, z =~ PC3, color = clusterino_pam2$type, colors = c('darkred', 'blue4'), mode = 'markers')
+
+```
+
+```{r Pediatric vs adult all HS,message=FALSE, warning=FALSE}
+
+# Add a new column 'type' to clusterino_pam2_nonHS, initially labeled as 'pediatric'
+clusterino_pam2_nonHS$type <- 'pediatric'
+
+# Assign 'adult' to rows 533:640 in the 'type' column
+clusterino_pam2_nonHS$type[533:640] <- 'adult'
+
+# Adjust 'type' for specific rows based on gene names
+clusterino_pam2_nonHS$type[rownames(clusterino_pam2_nonHS) %in% c('CMUTALLS4', 'T59', 'T91', 'T89', 'T87', 'T82', 'T81', 'T74', 'T59', 'T112', 'T102', 'SIHTALLS32', 'SIHTALLS25', 'SIHTALLS12', 'H301TALLS3', 'H301TALLS13', 'H301TALLS11', 'CMUTALLS9', 'CMUTALLS13', 'T67', 'T77', 'T103')] <- 'pediatric'
+
+# Create a dataframe 'components2_nonHS' using the PC coordinates and 'clusterino_pam2_nonHS' information
+components2_nonHS <- as.data.frame(data.PC_nonHG_tumor$x)
+components2_nonHS <- cbind(components2_nonHS, clusterino_pam2_nonHS)
+components2_nonHS$PC2 <- -components2_nonHS$PC2
+
+# Create an interactive scatter plot for 'type' using PC1 and PC2
+fig3_nonHS <- plot_ly(components2_nonHS, x =~ PC1, y =~ PC2, color = clusterino_pam2_nonHS$type, colors = c('red2', 'blue4'), type = 'scatter', mode = 'markers')
+
+# Create an interactive 3D scatter plot for 'type' using PC1, PC2, and PC3
+fig4_nonHS <- plot_ly(components2_nonHS, x =~ PC1, y =~ PC2, z =~ PC3, color = clusterino_pam2_nonHS$type, colors = c('darkred', 'blue4'), mode = 'markers')
+
+```
+
+# Metadata introduction
+
+```{r Load the metadata,message=FALSE, warning=FALSE}
+
+# Set the working directory to the path where 'GSE181157_SampleMetadata.xlsx' is located
+setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
+
+# Read the metadata from the Excel file
+metadata <- readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
+
+# Extract 'DFCI ID' column and assign row names from clusterino_pam2 (indexes 39 to 211)
+metadata$`DFCI ID` <- rownames(clusterino_pam2)[39:211]
+
+# Set the working directory to a different path (adjust as needed)
+setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
+
+# Initialize 'risk' column in clusterino_pam2 with 'Not Available'
+clusterino_pam2$risk <- 'Not Available'
+# Update 'risk' based on 'DFCI ID' matching
+clusterino_pam2$risk[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+
+# Set the working directory to the path where 'GSE181157_SampleMetadata.xlsx' is located
+setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
+
+# Read the metadata from the Excel file for non-HS samples
+metadata_nonHS <- readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
+
+# Extract 'DFCI ID' column and assign row names from clusterino_pam2_nonHS (indexes 39 to 211)
+metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[39:211]
+
+# Set the working directory to a different path (adjust as needed)
+setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
+
+# Initialize 'risk' column in clusterino_pam2_nonHS with 'Not Available'
+clusterino_pam2_nonHS$risk <- 'Not Available'
+
+# Update 'risk' based on 'DFCI ID' matching with metadata_nonHS
+clusterino_pam2_nonHS$risk[rownames(clusterino_pam2_nonHS) %in% metadata_nonHS$`DFCI ID`] <- metadata_nonHS$`Final Risk`
+
+```
+
+```{r Plot of subtypes HS,message=FALSE, warning=FALSE}
+
+# Initialize 'Cell_type' column in clusterino_pam2 with 'Unknown'
+clusterino_pam2$Cell_type <- 'Unknown'
+
+# Assign 'T cell' to 'Cell_type' for samples in the range 533:640
+clusterino_pam2$Cell_type[533:640] <- 'T cell'
+
+# Update 'Cell_type' based on matching 'DFCI ID' with 'Diagnosis' from metadata
+clusterino_pam2$Cell_type[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+
+# Combine data.PC.tumor$x with clusterino_pam2
+componet4 <- cbind(data.PC.tumor$x, clusterino_pam2)
+componet4$PC2 <- -componet4$PC2  # Negate PC2 values for better visualization
+
+# Create a 2D scatter plot
+fig7 <- plot_ly(componet4, x=~PC1, y=~PC2, color=clusterino_pam2$Cell_type,
+                colors=c('red', 'blue', 'green'), type='scatter', mode='markers')
+
+# Create a 3D scatter plot
+fig8 <- plot_ly(componet4, x=~PC1, y=~PC2, z=~PC3, color=clusterino_pam2$Cell_type,
+                colors=c('darkred', 'blue4', 'green', 'orange'), mode='markers')
+
+# Display the plots
+fig7
+fig8
+
+```
+
+```{r Plot of subtypes non HS,message=FALSE, warning=FALSE}
+
+# Initialize 'Cell_type' column in clusterino_pam2_nonHS with 'Unknown'
+clusterino_pam2_nonHS$Cell_type <- 'Unknown'
+
+# Assign 'T cell' to 'Cell_type' for samples in the range 533:640
+clusterino_pam2_nonHS$Cell_type[533:640] <- 'T cell'
+
+# Update 'Cell_type' based on matching 'DFCI ID' with 'Diagnosis' from metadata
+clusterino_pam2_nonHS$Cell_type[rownames(clusterino_pam2_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+
+# Combine data.PC_nonHG_tumor$x with clusterino_pam2_nonHS
+componet4_nonHS <- cbind(data.PC_nonHG_tumor$x, clusterino_pam2_nonHS)
+componet4_nonHS$PC2 <- -componet4_nonHS$PC2  # Negate PC2 values for better visualization
+
+# Create a 2D scatter plot
+fig7_nonHS <- plot_ly(componet4_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$Cell_type,
+                      colors=c('red2', 'blue4'), type='scatter', mode='markers')
+
+# Create a 3D scatter plot
+fig8_nonHS <- plot_ly(componet4_nonHS, x=~PC1, y=~PC2, z=~PC3, color=clusterino_pam2_nonHS$Cell_type,
+                      colors=c('darkred', 'blue4', 'green', 'orange'), mode='markers')
+
+# Display the plots
+fig7_nonHS
+fig8_nonHS
+
+```
+
+```{r Complete plot with metadata HS,message=FALSE, warning=FALSE}
+
+# HS
+clusterino_pam1 <- as.data.frame(pam1$clustering)
+clusterino_pam1$C_T <- "Tumor"
+# Set control samples as 'Control'
+clusterino_pam1$C_T[rownames(clusterino_pam1) %in% c(
+  "X817_T", "X845_B", "X845_T", "X858_B", "X858_T", "X867_B", "X867_T", "X899_B", "X899_T", "X817_B",
+  "TU0049_CD4_HC", "TU0049_CD8_HC", "TU0051_CD4_HC", "TU0051_CD8_HC", "TU0054_CD4_HC", "TU0054_CD8_HC",
+  "XT0130_CD4_HC", "XT0130_CD8_HC", "XT0133_CD4_HC", "XT0133_CD8_HC", "XT0108_CD4_HC", "XT0108_CD8_HC",
+  "XT0115_CD4_HC", "XT0115_CD8_HC", "XT0127_CD4_HC", "XT0127_CD8_HC", "XT0131_CD4_HC", "XT0131_CD8_HC",
+  "XT0141_CD4_HC", "XT0141_CD8_HC"
+)] <- 'Control'
+
+clusterino_pam1$type <- 'pediatric'
+# Set adult samples based on certain conditions
+clusterino_pam1$type[563:670] <- 'adult'
+clusterino_pam1$type[rownames(clusterino_pam1) %in% c(
+  'CMUTALLS4', 'T59', 'T91', 'T89', 'T87', 'T82', 'T81', 'T74', 'T59', 'T112', 'T102', 'SIHTALLS32',
+  'SIHTALLS25', 'SIHTALLS12', 'H301TALLS3', 'H301TALLS13', 'H301TALLS11', 'CMUTALLS9', 'CMUTALLS13',
+  'T67', 'T77', 'T103'
+)] <- 'pediatric'
+clusterino_pam1$type[11:30] <- 'adult'
+
+clusterino_pam1$risk <- 'Not Available'
+# Set risk values based on the provided conditions
+clusterino_pam1$risk[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+
+clusterino_pam1$Cell_type <- 'Unknown'
+# Set control and T Cell types based on certain conditions
+clusterino_pam1$Cell_type[1:30] <- 'Control'
+clusterino_pam1$Cell_type[563:670] <- 'T Cell'  # by letaruet of only T cells
+# Set cell types based on Diagnosis information
+clusterino_pam1$Cell_type[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+
+# Combine data with clustering information
+component5 <- cbind(data.PC$x, clusterino_pam1)
+component5$PC2 <- -component5$PC2
+
+# Create a 3D scatter plot
+fig9 <- plot_ly(
+  component5, x=~PC1, y=~PC2, z=~PC3,
+  color=clusterino_pam1$Cell_type, colors=brewer.pal(n = 4, name = "RdBu"),
+  symbol=clusterino_pam1$type, symbols=c('diamond', 'circle'), mode='markers',
+  marker=list(size=4)
+)
+fig9
+
+# Save the data to a CSV file for the ML pipeline
+write.csv(component5, file='ML_HS.csv', row.names=TRUE)
+
+```
+
+```{r Complete plot with metadata non HS,message=FALSE, warning=FALSE}
+
+# non_HS
+clusterino_pam1_nonHS <- as.data.frame(pam1_nonHS$clustering)
+clusterino_pam1_nonHS$C_T <- "Tumor"
+# Set control samples as 'Control'
+clusterino_pam1_nonHS$C_T[rownames(clusterino_pam1_nonHS) %in% c(
+  "X817_T", "X845_B", "X845_T", "X858_B", "X858_T", "X867_B", "X867_T", "X899_B", "X899_T", "X817_B",
+  "TU0049_CD4_HC", "TU0049_CD8_HC", "TU0051_CD4_HC", "TU0051_CD8_HC", "TU0054_CD4_HC", "TU0054_CD8_HC",
+  "XT0130_CD4_HC", "XT0130_CD8_HC", "XT0133_CD4_HC", "XT0133_CD8_HC", "XT0108_CD4_HC", "XT0108_CD8_HC",
+  "XT0115_CD4_HC", "XT0115_CD8_HC", "XT0127_CD4_HC", "XT0127_CD8_HC", "XT0131_CD4_HC", "XT0131_CD8_HC",
+  "XT0141_CD4_HC", "XT0141_CD8_HC"
+)] <- 'Control'
+
+clusterino_pam1_nonHS$type <- 'pediatric'
+# Set adult samples based on certain conditions
+clusterino_pam1_nonHS$type[563:670] <- 'adult'
+clusterino_pam1_nonHS$type[rownames(clusterino_pam1_nonHS) %in% c(
+  'CMUTALLS4', 'T59', 'T91', 'T89', 'T87', 'T82', 'T81', 'T74', 'T59', 'T112', 'T102', 'SIHTALLS32',
+  'SIHTALLS25', 'SIHTALLS12', 'H301TALLS3', 'H301TALLS13', 'H301TALLS11', 'CMUTALLS9', 'CMUTALLS13',
+  'T67', 'T77', 'T103'
+)] <- 'pediatric'
+clusterino_pam1_nonHS$type[11:30] <- 'adult'
+
+clusterino_pam1_nonHS$risk <- 'Not Available'
+# Set risk values based on the provided conditions
+clusterino_pam1_nonHS$risk[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+
+clusterino_pam1_nonHS$Cell_type <- 'Unknown'
+# Set control and T Cell types based on certain conditions
+clusterino_pam1_nonHS$Cell_type[1:30] <- 'Control'
+clusterino_pam1_nonHS$Cell_type[563:670] <- 'T Cell'  # by letaruet of only T cells
+# Set cell types based on Diagnosis information
+clusterino_pam1_nonHS$Cell_type[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+
+# Combine data with clustering information
+component6 <- cbind(data.PC_nonHG$x, clusterino_pam1_nonHS)
+component6$PC2 <- -component6$PC2
+
+# Create a 3D scatter plot
+fig9_nonHS <- plot_ly(
+  component6, x=~PC1, y=~PC2, z=~PC3,
+  color=clusterino_pam1_nonHS$Cell_type, colors=brewer.pal(n = 4, name = "RdBu"),
+  symbol=clusterino_pam1_nonHS$type, symbols=c('diamond', 'circle'), mode='markers',
+  marker=list(size=4)
+)
+fig9_nonHS
+
+# Save the data to a CSV file for the ML pipeline
+write.csv(component6, file='ML_nonHS.csv', row.names=TRUE)
+
+```
+
+# Categories of HS genes found UP and Down between Tumor and Control
+
+```{r ,message=FALSE, warning=FALSE}
+
+# Filter Human_genes based on Ensembl IDs in Diff_expressed
+Categories_HS <- Human_genes %>% dplyr::filter(Human_genes$`Ensembl ID` %in% rownames(Diff_expressed))
+
+# Create a table of the column General Mechanism of Origin
+table_data <- table(Categories_HS$`General Mechanism of Origin`)
+
+# Barplot
+barplot(table_data, horiz = TRUE, names.arg = c("1", "2", "3", "4", "5", "6", "7", "8", "9"),
+        col = brewer.pal(n = 9, name = "Set1"))
+# Add legend to the barplot
+legend(x = "topright", inset = 0.02, y.intersp = 1, title = "Mechanism of origin",
+       legend = c("de novo origin", "amplification", "loss", "sequence alteration",
+                  "structure alteration", "undefined feature", "lost in chimpanzee",
+                  "new non-coding gene", "regulatory region alteration"),
+       fill = brewer.pal(n = 9, name = "Set1"), cex = 0.7)
+
+# Pie chart
+slices <- c(1, 63, 4, 21, 10, 11, 3, 1, 8)
+pct <- round(slices / sum(slices) * 100)
+labels <- c("", "", "", "", "", "", "", "", "")
+labels <- paste(labels, pct)
+labels <- paste(labels, "%", sep = " ")
+pie(slices, labels, col = brewer.pal(n = 9, name = "Set1"))
+# Add legend to the pie chart
+legend(x = "topright", inset = 0.02, y.intersp = 1, title = "Mechanism of origin",
+       legend = c("de novo origin", "amplification", "loss", "sequence alteration",
+                  "structure alteration", "human specific", "lost in chimpanzee",
+                  "new non-coding gene", "regulatory region alteration"),
+       fill = brewer.pal(n = 9, name = "Set1"), cex = 0.7)
+
+
+```
+
+# Analysis of up and down regulated
+
+```{r ,message=FALSE, warning=FALSE}
+
+# Set up a connection to the Ensembl database for human genes
+ensembl <- useMart(biomart = 'ensembl', dataset = 'hsapiens_gene_ensembl')
+
+```
+
+```{r  non_HS preparation ,message=FALSE, warning=FALSE}
+# non Human Specific 
+# Retrieve information for selected attributes using getBM
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                filters = c('ensembl_gene_id'),
+                values = rownames(DEGs),
+                mart = ensmebl)
+
+# Add 'ensembl_gene_id' as a new column in DEGs
+DEGs_2 <- rownames_to_column(DEGs, var = 'ensembl_gene_id')
+
+# Merge DEGs_2 with the convert data based on 'ensembl_gene_id'
+DEGs_merge_convert <- merge(DEGs_2, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Remove rows with missing 'entrezgene_id'
+DEGs_merge_convert <- DEGs_merge_convert[which(!is.na(DEGs_merge_convert$entrezgene_id)),]
+
+# Remove duplicate rows based on 'entrezgene_id'
+DEGs_merge_convert <- DEGs_merge_convert[-which(duplicated(DEGs_merge_convert$entrezgene_id)),]
+
+# Filter rows where 'class' is '+'
+Up_DEGs_merge_convert <- DEGs_merge_convert %>% dplyr::filter(DEGs_merge_convert$class == '+')
+
+# Filter rows where 'class' is '-'
+Down_DEGs_merge_convert <- DEGs_merge_convert %>% dplyr::filter(DEGs_merge_convert$class == '-')
+
+```
+
+```{r non_HS upregulated genes,message=FALSE, warning=FALSE}
+# Perform Gene Ontology (GO) enrichment analysis for upregulated genes
+# Enrichment analysis using enrichGO function
+ego_BP_UP <- enrichGO(gene = Up_DEGs_merge_convert$external_gene_name,
+                      OrgDb = org.Hs.eg.db,
+                      keyType = 'SYMBOL',
+                      ont = 'BP',
+                      pAdjustMethod = 'BH',
+                      pvalueCutoff = 0.05,
+                      qvalueCutoff = 0.05)
+
+# Create a barplot to visualize enriched Gene Ontology terms
+barplot(ego_BP_UP, showCategory = 15)
+
+# Create a dotplot to visualize enriched Gene Ontology terms
+dotplot(ego_BP_UP, showCategory = 15)
+
+# Create a heatplot to visualize enriched Gene Ontology terms
+heatplot(ego_BP_UP, showCategory = 2)
+
+# Perform Pathway enrichment analysis for upregulated genes
+# Enrichment analysis using enrichWP function
+eWP_BP_UP <- enrichWP(gene = Up_DEGs_merge_convert$entrezgene_id,
+                      organism = 'Homo sapiens',
+                      pvalueCutoff = 0.05,
+                      qvalueCutoff = 0.1)
+
+# Display the top 10 enriched pathways
+head(eWP_BP_UP, 10)
+
+```
+
+```{r non_HS downregulated genes,message=FALSE, warning=FALSE}
+
+# Perform Gene Ontology (GO) enrichment analysis for downregulated genes
+# Enrichment analysis using enrichGO function
+ego_BP_DW <- enrichGO(gene = Down_DEGs_merge_convert$external_gene_name,
+                      OrgDb = org.Hs.eg.db,
+                      keyType = 'SYMBOL',
+                      ont = 'BP',
+                      pAdjustMethod = 'BH',
+                      pvalueCutoff = 0.05,
+                      qvalueCutoff = 0.05)
+
+# Create a barplot to visualize enriched Gene Ontology terms
+barplot(ego_BP_DW, showCategory = 15)
+
+# Create a dotplot to visualize enriched Gene Ontology terms
+dotplot(ego_BP_DW, showCategory = 15)
+
+# Create a heatplot to visualize enriched Gene Ontology terms
+heatplot(ego_BP_DW, showCategory = 2)
+
+# Perform Pathway enrichment analysis for downregulated genes
+# Enrichment analysis using enrichWP function
+eWP_BP_DW <- enrichWP(gene = Down_DEGs_merge_convert$entrezgene_id,
+                      organism = 'Homo sapiens',
+                      pvalueCutoff = 0.05,
+                      qvalueCutoff = 0.1)
+
+# Display the top 10 enriched pathways for downregulated genes
+head(eWP_BP_DW@result[["Description"]], 10)
+
+```
+
+```{r HS preparation,message=FALSE, warning=FALSE}
+# Human-Specific (HS)
+# Retrieve information for selected attributes using getBM
+convert_HS <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                    filters = c('ensembl_gene_id'),
+                    values = rownames(DEGs_Hsgenes),
+                    mart = ensmebl)
+
+# Add 'ensembl_gene_id' as a new column in DEGs_Hsgenes
+DEGs_Hsgenes_2 <- rownames_to_column(DEGs_Hsgenes, var = 'ensembl_gene_id')
+
+# Merge DEGs_Hsgenes_2 with the convert_HS data based on 'ensembl_gene_id'
+DEGs_merge_convert_HS <- merge(DEGs_Hsgenes_2, convert_HS, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Remove rows with missing 'entrezgene_id'
+DEGs_merge_convert_HS <- DEGs_merge_convert_HS[which(!is.na(DEGs_merge_convert_HS$entrezgene_id)),]
+
+# Remove duplicate rows based on 'entrezgene_id'
+DEGs_merge_convert_HS <- DEGs_merge_convert_HS[-which(duplicated(DEGs_merge_convert_HS$entrezgene_id)),]
+
+# Filter rows where 'class' is '+'
+Up_DEGs_merge_convert_HS <- DEGs_merge_convert_HS %>% dplyr::filter(DEGs_merge_convert_HS$class == '+')
+
+# Filter rows where 'class' is '-'
+Down_DEGs_merge_convert_HS <- DEGs_merge_convert_HS %>% dplyr::filter(DEGs_merge_convert_HS$class == '-')
+
+```
+
+```{r upregulated genes HS,message=FALSE, warning=FALSE}
+
+# Perform Gene Ontology (GO) enrichment analysis for upregulated genes in the Human-Specific dataset
+# Enrichment analysis using enrichGO function
+ego_BP_UP_HS <- enrichGO(gene = Up_DEGs_merge_convert_HS$external_gene_name,
+                         OrgDb = org.Hs.eg.db,
+                         keyType = 'SYMBOL',
+                         ont = 'BP',
+                         pAdjustMethod = 'BH',
+                         pvalueCutoff = 0.2,
+                         qvalueCutoff = 0.2)
+
+# Create a barplot to visualize enriched Gene Ontology terms
+barplot(ego_BP_UP_HS)
+
+# Create a dotplot to visualize enriched Gene Ontology terms (showing top 15 categories)
+dotplot(ego_BP_UP_HS, showCategory = 15)
+
+# Create a heatplot to visualize enriched Gene Ontology terms (showing top 2 categories)
+heatplot(ego_BP_UP_HS, showCategory = 2)
+
+# Note: Pathway annotation will be done after gene expansion, due to lack of information and low numbers of terms
+
+```
+
+```{r downregulated genes HS,message=FALSE, warning=FALSE}
+
+# Perform Gene Ontology (GO) enrichment analysis for downregulated genes in the Human-Specific HS dataset
+# Enrichment analysis using enrichGO function
+ego_BP_DW_HS <- enrichGO(gene = Down_DEGs_merge_convert_HS$external_gene_name,
+                         OrgDb = org.Hs.eg.db,
+                         keyType = 'SYMBOL',
+                         ont = 'BP',
+                         pAdjustMethod = 'BH',
+                         pvalueCutoff = 0.2,
+                         qvalueCutoff = 0.2)
+
+# Create a barplot to visualize enriched Gene Ontology terms
+barplot(ego_BP_DW_HS)
+
+# Create a dotplot to visualize enriched Gene Ontology terms
+dotplot(ego_BP_DW_HS)
+
+# Create a heatplot to visualize enriched Gene Ontology terms (showing top 2 categories)
+heatplot(ego_BP_DW_HS, showCategory = 2)
+
+```
+
+# Other explorative DEGs
+
+```{r Preparation for subtypes DEGs,message=FALSE, warning=FALSE}
+
+#### DEG subtype vs subtype without controls
+
+# Create a dataframe containing information on the samples for DGE
+# The subtype information is extracted from the 'clusterino_pam2' object
+info_subtypes <- clusterino_pam2
+info_subtypes$sample <- rownames(info_subtypes)
+info_subtypes <- info_subtypes[info_subtypes$Cell_type != "Unkown",]
+tumors_subtype <- tumor_adjusted1[colnames(tumor_adjusted1) %in% rownames(info_subtypes)]
+
+# Create a DGEList object for subtype vs. subtype comparison
+edge_c_subtypes <- DGEList(counts = tumors_subtype,
+                           group = info_subtypes$Cell_type,
+                           samples = info_subtypes,
+                           genes = tumors_subtype)
+edge_n_subtypes <- calcNormFactors(edge_c_subtypes, method = 'TMM')
+
+# Create a cpm table
+cpm_table_subtypes <- as.data.frame(round(cpm(edge_n_subtypes), 2))
+
+# Define the experimental design matrix
+# This model has no intercept, and each subtype is represented as a separate variable
+design_subtype <- model.matrix(~0 + group, data = edge_n_subtypes$samples, contrast.arg = list(group = 'contr.sum'))
+colnames(design_subtype) <- levels(edge_n_subtypes$samples$group)
+rownames(design_subtype) <- edge_n_subtypes$samples$sample
+colnames(design_subtype) <- c("PreB", "PreT", "T")
+
+# Calculate dispersion and fit the data with edgeR
+edge_d_subtype <- estimateDisp(edge_n_subtypes, design_subtype)
+
+# Fit the data using a negative binomial distribution
+edge_f_subtype <- glmQLFit(edge_d_subtype, design_subtype)
+
+```
+
+```{r Subtype B vs all,message=FALSE, warning=FALSE}
+
+# Subtype B vs all
+# Definition of the contrast (conditions to be compared)
+contro_subtype_B <- makeContrasts("PreB-(PreT+T)/2", levels = design_subtype)
+# contro_subtype[,"PreB-PreT-T"] <- c(1, -0.5, -0.5) # Alternative definition of contrast
+
+# Fit the model with generalized linear models
+edge_t_subtype_B <- glmQLFTest(edge_f_subtype, contrast = contro_subtype_B)
+
+# Extract the top 20 differentially expressed genes
+DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B, n = 21420, p.value = 0.01, sort.by = "logFC"))
+
+# Add a new column to the DEGs dataframe called class
+# Used to express the values of the fold change of the transcripts
+# Selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases).
+DEGs_subtype_B$class <- '='
+DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC > 1.5)] = '+'
+DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC < (-1.5))] = '-'
+DEGs_subtype_B <- DEGs_subtype_B[order(DEGs_subtype_B$logFC, decreasing = TRUE),]  # Order based on the fold change
+
+# Display the count of genes in each class
+table(DEGs_subtype_B$class)
+# +: 462  -: 432  =: 7894
+
+```
+
+```{r HS in upregulated and downregulated genes in Pre B type ,message=FALSE, warning=FALSE}
+
+# Check how many human-specific genes are in the upregulated and downregulated genes in Pre B type
+
+# Filter DEGs in Pre B type that are also human-specific genes
+DEGs_subtype_B_HS <- DEGs_subtype_B %>%
+  dplyr::filter(rownames(DEGs_subtype_B) %in% Human_genes$`Ensembl ID`)
+
+# Filter upregulated human-specific genes in Pre B type
+Up_HS_PreB <- DEGs_subtype_B[DEGs_subtype_B$class == '+',] %>%
+  dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class == '+',]) %in% Human_genes$`Ensembl ID`)
+
+# Filter downregulated human-specific genes in Pre B type
+Down_HS_PreB <- DEGs_subtype_B[DEGs_subtype_B$class == '-',] %>%
+  dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class == '-',]) %in% Human_genes$`Ensembl ID`)
+
+```
+
+```{r Subtype PreT vs all,message=FALSE, warning=FALSE}
+
+# Subtype PreT vs all
+# Definition of the contrast (conditions to be compared)
+contro_subtype_PT <- makeContrasts("PreT-(PreB+T)/2", levels = design_subtype)
+# contro_subtype[,"PreB-PreT-T"] <- c(1, -0.5, -0.5) # Alternative definition of contrast
+
+# Fit the model with generalized linear models
+edge_t_subtype_PT <- glmQLFTest(edge_f_subtype, contrast = contro_subtype_PT)
+
+# Extract the top 20 differentially expressed genes
+DEGs_subtype_PT <- as.data.frame(topTags(edge_t_subtype_PT, n = 21420, p.value = 0.01, sort.by = "logFC"))
+
+# Add a new column to the DEGs dataframe called class
+# Used to express the values of the fold change of the transcripts
+# Selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases).
+DEGs_subtype_PT$class <- '='
+DEGs_subtype_PT$class[which(DEGs_subtype_PT$logCPM > 1 & DEGs_subtype_PT$logFC > 1.5)] = '+'
+DEGs_subtype_PT$class[which(DEGs_subtype_PT$logCPM > 1 & DEGs_subtype_PT$logFC < (-1.5))] = '-'
+DEGs_subtype_PT <- DEGs_subtype_PT[order(DEGs_subtype_PT$logFC, decreasing = TRUE),]  # Order based on the fold change
+
+# Display the count of genes in each class
+table(DEGs_subtype_PT$class)
+# +: 482  -: 848  =: 6773
+
+```
+
+```{r HS in upregulated and downregulated genes in Pre T type,message=FALSE, warning=FALSE}
+
+# Check how many human-specific genes are in the upregulated and downregulated genes in subtype PreT
+# Filter DEGs in subtype PreT that are also human-specific genes
+DEGs_subtype_PT_HS <- DEGs_subtype_PT %>%
+  dplyr::filter(rownames(DEGs_subtype_PT) %in% Human_genes$`Ensembl ID`)
+
+# Filter upregulated human-specific genes in subtype PreT
+Up_HS_PreT <- DEGs_subtype_PT[DEGs_subtype_PT$class == '+',] %>%
+  dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '+',]) %in% Human_genes$`Ensembl ID`)
+
+# Filter downregulated human-specific genes in subtype PreT
+Down_HS_PreT <- DEGs_subtype_PT[DEGs_subtype_PT$class == '-',] %>%
+  dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '-',]) %in% Human_genes$`Ensembl ID`)
+
+```
+
+```{r Subtype T vs all,message=FALSE, warning=FALSE}
+
+# Subtype T vs all
+# Definition of the contrast (conditions to be compared)
+contro_subtype_T <- makeContrasts("T-(PreB+PreT)/2", levels = design_subtype)
+# contro_subtype[,"PreB-PreT-T"] <- c(1, -0.5, -0.5) # Alternative definition of contrast
+
+# Fit the model with generalized linear models
+edge_t_subtype_T <- glmQLFTest(edge_f_subtype, contrast = contro_subtype_T)
+
+# Extract the top 20 differentially expressed genes
+DEGs_subtype_T <- as.data.frame(topTags(edge_t_subtype_T, n = 21420, p.value = 0.01, sort.by = "logFC"))
+
+# Add a new column to the DEGs dataframe called class
+# Used to express the values of the fold change of the transcripts
+# Selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases).
+DEGs_subtype_T$class <- '='
+DEGs_subtype_T$class[which(DEGs_subtype_T$logCPM > 1 & DEGs_subtype_T$logFC > 1.5)] = '+'
+DEGs_subtype_T$class[which(DEGs_subtype_T$logCPM > 1 & DEGs_subtype_T$logFC < (-1.5))] = '-'
+DEGs_subtype_T <- DEGs_subtype_T[order(DEGs_subtype_T$logFC, decreasing = TRUE),]  # Order based on the fold change
+
+# Display the count of genes in each class
+table(DEGs_subtype_T$class)
+# +: 381  -: 16  =: 3848
+
+```
+
+```{r HS in upregulated and downregulated genes in T type,message=FALSE, warning=FALSE}
+
+# Check how many human-specific genes are in the upregulated and downregulated genes in subtype T
+# Filter DEGs in subtype T that are also human-specific genes
+DEGs_subtype_T_HS <- DEGs_subtype_T %>%
+  dplyr::filter(rownames(DEGs_subtype_T) %in% Human_genes$`Ensembl ID`)
+
+# Filter upregulated human-specific genes in subtype T
+Up_HS_T <- DEGs_subtype_T[DEGs_subtype_T$class == '+',] %>%
+  dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '+',]) %in% Human_genes$`Ensembl ID`)
+
+# Filter downregulated human-specific genes in subtype T
+Down_HS_T <- DEGs_subtype_T[DEGs_subtype_T$class == '-',] %>%
+  dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '-',]) %in% Human_genes$`Ensembl ID`)
+
+```
+
+# COMPARISON BETWEEN THE HS IN THE 3 SUBTYPES -> NOT sure of the code
+
+```{r Compare sets among subtypes,message=FALSE, warning=FALSE}
+
+# Compare sets of human-specific genes among different subtypes
+
+# Upregulated genes in T and PreT
+Common_T_PT <- Up_HS_T[rownames(Up_HS_T) %in% rownames(Up_HS_PreT),]
+# 2 genes in common
+
+# Upregulated genes in PreT and PreB
+Common_PT_PB <- Up_HS_PreT[rownames(Up_HS_PreT) %in% rownames(Up_HS_PreB),]
+# 0 genes in common
+
+# Upregulated genes in T and PreB
+Common_T_PB <- Up_HS_T[rownames(Up_HS_T) %in% rownames(Up_HS_PreB),]
+# 2 genes in common
+
+# Downregulated genes in T and PreT
+Common_T_PT_D <- Down_HS_T[rownames(Down_HS_T) %in% rownames(Down_HS_PreT),]
+# 0 genes in common
+
+# Downregulated genes in T and PreB
+Common_T_PB_D <- Down_HS_T[rownames(Down_HS_T) %in% rownames(Down_HS_PreB),]
+# 0 genes in common
+
+# Downregulated genes in PreT and PreB
+Common_PT_PB_D <- Down_HS_PreT[rownames(Down_HS_PreT) %in% rownames(Down_HS_PreB),]
+# 6 genes in common -> PreB has 22 down hs while PreT has 23
+
+## File creation
+# Write CSV files for each set of differentially expressed genes
+# write.csv(DEGs_subtype_T, file = 'DEGs_subtype_T.csv', row.names = TRUE, col.names = TRUE)
+# write.csv(DEGs_subtype_PT, file = 'DEGs_subtype_PT.csv', row.names = TRUE, col.names = TRUE)
+# write.csv(DEGs_subtype_B, file = 'DEGs_subtype_B.csv', row.names = TRUE, col.names = TRUE)
+
+```
+
+# Differential expression analysis: adults vs pediatric
+
+```{r DEG adults vs pediatric ,message=FALSE, warning=FALSE}
+
+# Creating a dataframe containing information on the samples
+info_age <- clusterino_pam2
+
+# Creating the DGEList object
+edge_c_age <- DGEList(counts = tumor_adjusted1, group = info_age$type, samples = info_age, genes = tumor_adjusted1)
+edge_n_age <- calcNormFactors(edge_c_age, method = 'TMM')
+
+# Creating the cpm table
+cpm_table_age <- as.data.frame(round(cpm(edge_n_age), 2)) # Library size scaled by normalization factor
+
+# Defining the experimental design matrix
+design_age <- model.matrix(~0 + group, data = edge_n_age$samples)
+colnames(design_age) <- levels(edge_n_age$samples$group)
+rownames(design_age) <- edge_n_age$samples$sample
+
+# Calculating dispersion and fitting the result with edgeR
+edge_d_age <- estimateDisp(edge_n_age, design_age)
+
+# Fitting the data using a negative binomial distribution
+edge_f_age <- glmQLFit(edge_d_age, design_age)
+
+# Definition of the contrast (conditions to be compared)
+contro_age <- makeContrasts("pediatric-adult", levels = design_age)
+
+# Fit the model with generalized linear models
+edge_t_age <- glmQLFTest(edge_f_age, contrast = contro_age)
+
+```
+
+```{r adults vs pediatric DEG analysis,message=FALSE, warning=FALSE}
+
+# Extracting the top 20 DE genes from the edgeR results
+DEGs_age <- as.data.frame(topTags(edge_t_age, n = 21420, p.value = 0.01, sort.by = "logFC"))
+
+# Adding a new column to the DEGs dataframe called class
+# Used to express the values of the fold change of the transcripts
+# Selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases)
+DEGs_age$class <- '='
+DEGs_age$class[which(DEGs_age$logCPM > 1 & DEGs_age$logFC > 1.5)] = '+'
+DEGs_age$class[which(DEGs_age$logCPM > 1 & DEGs_age$logFC < (-1.5))] = '-'
+DEGs_age <- DEGs_age[order(DEGs_age$logFC, decreasing = TRUE),]  # Order based on the fold change
+
+# Display the count of genes in each class
+table(DEGs_age$class)
+# +: 55  -: 108  =: 3508
+
+```
+
+```{r  HS in upregulated and downregulated genes in pediatric,message=FALSE, warning=FALSE}
+
+# Filter DEGs in pediatric cancer that are also human-specific genes
+DEGs_age_HS <- DEGs_age %>% 
+  dplyr::filter(rownames(DEGs_age) %in% Human_genes$`Ensembl ID`)
+
+# Filter upregulated human-specific genes in pediatric cancer
+Up_HS_age <- DEGs_age[DEGs_age$class == '+',] %>% 
+  dplyr::filter(rownames(DEGs_age[DEGs_age$class == '+',]) %in% Human_genes$`Ensembl ID`)
+
+# Filter downregulated human-specific genes in pediatric cancer
+Down_HS_age <- DEGs_age[DEGs_age$class == '-',] %>% 
+  dplyr::filter(rownames(DEGs_age[DEGs_age$class == '-',]) %in% Human_genes$`Ensembl ID`)
+
+```
+
+# GO and KEGG on HS for pediatric up and down 
+
+```{r Convert to ensembl_gene_id for up ,message=FALSE, warning=FALSE}
+
+# Fetch additional information for upregulated human-specific genes in pediatric cancer
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('ensembl_gene_id'), values = row.names(Up_HS_age), mart = ensmebl)
+
+```
+
+```{r GO and KEGG on up regulated ,message=FALSE, warning=FALSE}
+
+# Add the ensembl_gene_id to Up_HS_age for merging
+Up_HS_age$ensembl_gene_id <- row.names(Up_HS_age)
+
+# Merge the information for upregulated human-specific genes
+merged <- merge(Up_HS_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Perform GO enrichment analysis
+up_age_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',
+                      ont = 'BP', pAdjustMethod = 'BH', pvalueCutoff = 1, qvalueCutoff = 1)
+
+# Create barplot for visualization
+barplot(up_age_hs, showCategory = 15)
+
+# Create dotplot for visualization
+dotplot(up_age_hs, showCategory = 15)
+
+# Create heatplot for visualization
+heatplot(up_age_hs, showCategory = 5)
+
+# Perform KEGG pathway enrichment analysis for upregulated human-specific genes
+up_age <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(up_age, 10)
+
+```
+
+```{r Convert to ensembl_gene_id for down ,message=FALSE, warning=FALSE}
+
+# Fetch additional information for downregulated human-specific genes in pediatric cancer
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('ensembl_gene_id'), values = row.names(Down_HS_age), mart = ensmebl)
+
+```
+
+```{r GO and KEGG on down regulated ,message=FALSE, warning=FALSE}
+
+# Add the ensembl_gene_id to Down_HS_age for merging
+Down_HS_age$ensembl_gene_id <- row.names(Down_HS_age)
+
+# Merge information for downregulated human-specific genes
+merged <- merge(Down_HS_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Perform GO enrichment analysis for downregulated human-specific genes
+down_age_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',
+                        ont = 'BP', pAdjustMethod = 'BH', pvalueCutoff = 1, qvalueCutoff = 1)
+
+# Create barplot for GO enrichment visualization
+barplot(down_age_hs, showCategory = 15)
+
+# Create dotplot for GO enrichment visualization
+dotplot(down_age_hs, showCategory = 15)
+
+# Create heatplot for GO enrichment visualization
+heatplot(down_age_hs, showCategory = 5)
+
+# Perform KEGG pathway enrichment analysis for downregulated human-specific genes
+down_age_wp <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(down_age_wp, 10)
+
+
+```
+
+# GO and KEGG on non HS for pediatric up and down 
+
+```{r Filter and Convert to ensembl_gene_id for up ,message=FALSE, warning=FALSE}
+
+# Filter upregulated genes
+Up_age <- DEGs_age[DEGs_age$class == '+',]
+
+# Fetch additional information for upregulated genes
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('ensembl_gene_id'), values = row.names(Up_age), mart = ensmebl)
+
+```
+
+```{r GO and KEGG on up regulated,message=FALSE, warning=FALSE}
+
+# Add the ensembl_gene_id to Up_age for merging
+Up_age$ensembl_gene_id <- row.names(Up_age)
+
+# Merge information for upregulated genes
+merged <- merge(Up_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Perform GO enrichment analysis for upregulated genes
+Up_age_BP <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',
+                      ont = 'BP', pAdjustMethod = 'BH', pvalueCutoff = 1, qvalueCutoff = 1)
+
+# Create barplot for GO enrichment visualization
+barplot(Up_age_BP, showCategory = 15)
+
+# Create dotplot for GO enrichment visualization
+dotplot(Up_age_BP, showCategory = 15)
+
+# Create heatplot for GO enrichment visualization
+heatplot(Up_age_BP, showCategory = 5)
+
+# Perform KEGG pathway enrichment analysis for upregulated genes
+up_age <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(up_age, 10)
+
+```
+
+```{r Filter and Convert to ensembl_gene_id for up,message=FALSE, warning=FALSE}
+
+# Filter downregulated genes
+Down_age <- DEGs_age[DEGs_age$class == '-',]
+
+# Fetch additional information for downregulated genes
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('ensembl_gene_id'), values = row.names(Down_age), mart = ensmebl)
+
+```
+
+```{r GO and KEGG on down regulated,message=FALSE, warning=FALSE}
+
+# Add the ensembl_gene_id to Down_age for merging
+Down_age$ensembl_gene_id <- row.names(Down_age)
+
+# Merge information for downregulated genes
+merged <- merge(Down_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+# Perform GO enrichment analysis for downregulated genes
+down_age_BP <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',
+                        ont = 'BP', pAdjustMethod = 'BH', pvalueCutoff = 1, qvalueCutoff = 1)
+
+# Create barplot for GO enrichment visualization
+barplot(down_age_BP, showCategory = 15)
+
+# Create dotplot for GO enrichment visualization
+dotplot(down_age_BP, showCategory = 15)
+
+# Create heatplot for GO enrichment visualization
+heatplot(down_age_BP, showCategory = 5)
+
+# Perform KEGG pathway enrichment analysis for downregulated genes
+down_age_wp <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(down_age_wp, 10)
+
+```
+
+# Graphs from python network x
+Section implemented with python in VS 
+
+# Analysis pathway and GO of the single graphs from python network x
+
+```{r Graph 1,message=FALSE, warning=FALSE}
+
+# Read the input CSV file and convert all entries to uppercase
+graph1 <- read.csv('Graph1_5HS.csv')
+graph1 <- dplyr::mutate_all(graph1, .funs = toupper)
+
+# Perform Gene Ontology (GO) enrichment analysis for Biological Processes (BP)
+graph1_BP <- enrichGO(gene = graph1$X0, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                      pAdjustMethod = 'BH', pvalueCutoff = 0.1, qvalueCutoff = 1)
+
+# Create a barplot for visualization of GO enrichment results
+barplot(graph1_BP, showCategory = 10)
+
+# Note: The following lines are commented out; you can uncomment them if needed
+#dotplot(graph1_BP, showCategory = 10)
+#heatplot(graph1_BP, showCategory = 5)
+
+# Fetch additional information for genes using their external gene names
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('external_gene_name'), values = graph1$X0, mart = ensmebl)
+
+# Merge additional information with the original data
+merged <- merge(graph1, convert, by.x = 'X0', by.y = 'external_gene_name')
+
+# Perform KEGG pathway enrichment analysis
+wp_graph1 <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.05, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(wp_graph1@result$Description, 10)
+
+```
+
+```{r Graph 2 ,message=FALSE, warning=FALSE}
+
+# Read the input CSV file and convert all entries to uppercase
+graph2 <- read.csv('Graph2_3HS.csv')
+graph2 <- dplyr::mutate_all(graph2, .funs = toupper)
+
+# Perform Gene Ontology (GO) enrichment analysis for Biological Processes (BP)
+graph2_BP <- enrichGO(gene = graph2$X0, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                      pAdjustMethod = 'BH', pvalueCutoff = 0.1, qvalueCutoff = 1)
+
+# Create a barplot for visualization of GO enrichment results
+barplot(graph2_BP, showCategory = 10)
+
+# Note: The following lines are commented out; you can uncomment them if needed
+#dotplot(graph2_BP, showCategory = 15)
+#heatplot(graph2_BP, showCategory = 5)
+
+# Fetch additional information for genes using their external gene names
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('external_gene_name'), values = graph2$X0, mart = ensmebl)
+
+# Merge additional information with the original data
+merged <- merge(graph2, convert, by.x = 'X0', by.y = 'external_gene_name')
+
+# Perform KEGG pathway enrichment analysis
+wp_graph2 <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(wp_graph2, 10)
+
+```
+
+```{r Graph 3 ,message=FALSE, warning=FALSE}
+
+# Read the input CSV file and convert all entries to uppercase
+graph3 <- read.csv('Graph3_3HS.csv')
+graph3 <- dplyr::mutate_all(graph3, .funs = toupper)
+
+# Perform Gene Ontology (GO) enrichment analysis for Biological Processes (BP)
+graph3_BP <- enrichGO(gene = graph3$X0, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL', ont = 'BP',
+                      pAdjustMethod = 'BH', pvalueCutoff = 1, qvalueCutoff = 1)
+
+# Create a barplot for visualization of GO enrichment results
+barplot(graph3_BP, showCategory = 10)
+
+# Note: The following lines are commented out; you can uncomment them if needed
+#dotplot(graph3_BP, showCategory = 15)
+#heatplot(graph3_BP, showCategory = 5)
+
+# Fetch additional information for genes using their external gene names
+convert <- getBM(attributes = c('ensembl_gene_id', 'entrezgene_id', 'external_gene_name'),
+                 filters = c('external_gene_name'), values = graph3$X0, mart = ensmebl)
+
+# Merge additional information with the original data
+merged <- merge(graph3, convert, by.x = 'X0', by.y = 'external_gene_name')
+
+# Perform KEGG pathway enrichment analysis
+wp_graph3 <- enrichWP(gene = merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1)
+
+# Display the top 10 enriched KEGG pathways
+head(wp_graph3, 10)
+
+
+```
+
+# VALIDATION OF ONEGENE
+
+```{r ,message=FALSE, warning=FALSE}
+
+# TO BE IMPLEMTENTED, WORK IN PROGRESS... ;)
+
+```

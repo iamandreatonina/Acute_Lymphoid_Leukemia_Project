@@ -1,0 +1,125 @@
+---
+title: "Filter_HS_LASSO_relax"
+author: "Thomas"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+
+# Read the colnames and create a df to filter with
+CPM_HS_LASSO_relax <- read.csv("CPM_HS_LASSO_relax.csv", row.names = 1)
+data <- data.frame(colnames(CPM_HS_LASSO_relax))
+data$HS <- data$colnames.CPM_HS_LASSO_relax.
+data$colnames.CPM_HS_LASSO_relax. <- NULL
+
+# Read data from "HS_after_LASSO.txt" into a DataFrame
+#data <- read.table("HS_after_LASSO_relaxed.txt", header = TRUE, sep = "\t")
+
+# Read data from "Origin_HS.csv" into another DataFrame
+Pre_B_HS <- read.csv("Origin_Pre_B_HS.csv")
+Pre_pediatricvsadult_HS <- read.csv("Origin_pediatricvsadult_HS.csv")
+Pre_T_HS <- read.csv("Origin_Pre_T_HS.csv")
+Pre_subtypeT_HS <- read.csv("Origin_subtypeT_HS.csv")
+Pre_TumorvsControl_HS <- read.csv("Origin_TumorvsControl_HS.csv")
+
+```
+
+## Pre_B_HS
+
+```{r cars}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+# Check if values in data$HS are present in Origin_HS$Ensembl.ID
+values_in_Origin_HS <- data$HS %in% Pre_B_HS$Ensembl.ID
+
+# Print the result (a logical vector indicating presence or absence)
+print(values_in_Origin_HS)
+
+# Filter Origin_HS based on values in data$HS
+filtered_Origin_HS <- Pre_B_HS[Pre_B_HS$Ensembl.ID %in% data$HS, ]
+
+# Write the filtered DataFrame to a new CSV file
+write.csv(filtered_Origin_HS, file = 'LASSO_Pre_B_HS.csv', row.names = TRUE)
+
+rm(values_in_Origin_HS,filtered_Origin_HS)
+
+```
+
+## Pediatric vs adult HS
+
+```{r pressure, echo=FALSE}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+# Check if values in data$HS are present in Origin_HS$Ensembl.ID
+values_in_Origin_HS <- data$HS %in% Pre_pediatricvsadult_HS$Ensembl.ID
+
+# Print the result (a logical vector indicating presence or absence)
+print(values_in_Origin_HS)
+
+# Filter Origin_HS based on values in data$HS
+filtered_Origin_HS <- Pre_pediatricvsadult_HS[Pre_pediatricvsadult_HS$Ensembl.ID %in% data$HS, ]
+
+# Write the filtered DataFrame to a new CSV file
+write.csv(filtered_Origin_HS, file = 'LASSO_Pre_pediatricvsadult_HS.csv', row.names = TRUE)
+
+rm(values_in_Origin_HS,filtered_Origin_HS)
+
+```
+
+## Pre_T_HS
+
+```{r}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+# Check if values in data$HS are present in Origin_HS$Ensembl.ID
+values_in_Origin_HS <- data$HS %in% Pre_T_HS$Ensembl.ID
+
+# Print the result (a logical vector indicating presence or absence)
+print(values_in_Origin_HS)
+
+# Filter Origin_HS based on values in data$HS
+filtered_Origin_HS <- Pre_T_HS[Pre_T_HS$Ensembl.ID %in% data$HS, ]
+
+# Write the filtered DataFrame to a new CSV file
+write.csv(filtered_Origin_HS, file = 'LASSO_Pre_T_HS.csv', row.names = TRUE)
+
+rm(values_in_Origin_HS,filtered_Origin_HS)
+```
+
+## subtypeT_HS
+
+```{r}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+# Check if values in data$HS are present in Origin_HS$Ensembl.ID
+values_in_Origin_HS <- data$HS %in% Pre_subtypeT_HS$Ensembl.ID
+
+# Print the result (a logical vector indicating presence or absence)
+print(values_in_Origin_HS)
+
+# Filter Origin_HS based on values in data$HS
+filtered_Origin_HS <- Pre_subtypeT_HS[Pre_subtypeT_HS$Ensembl.ID %in% data$HS, ]
+
+# Write the filtered DataFrame to a new CSV file
+write.csv(filtered_Origin_HS, file = 'LASSO_Pre_subtypeT_HS.csv', row.names = TRUE)
+
+rm(values_in_Origin_HS,filtered_Origin_HS)
+```
+
+## TumorvsControl_HS
+
+```{r}
+setwd("D:/VarieTHOM/University/QCB/4_SEMESTRE/post_LBDM")
+# Check if values in data$HS are present in Origin_HS$Ensembl.ID
+values_in_Origin_HS <- data$HS %in% Pre_TumorvsControl_HS$Ensembl.ID
+
+# Print the result (a logical vector indicating presence or absence)
+print(values_in_Origin_HS)
+
+# Filter Origin_HS based on values in data$HS
+filtered_Origin_HS <- Pre_TumorvsControl_HS[Pre_TumorvsControl_HS$Ensembl.ID %in% data$HS, ]
+
+# Write the filtered DataFrame to a new CSV file
+write.csv(filtered_Origin_HS, file = 'LASSO_Pre_TumorvsControl_HS.csv', row.names = TRUE)
+
+rm(values_in_Origin_HS,filtered_Origin_HS)
+```
+
