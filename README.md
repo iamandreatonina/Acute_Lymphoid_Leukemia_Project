@@ -18,7 +18,7 @@
 - Machine Learning Models
 - Validation and Evaluation
 - Biological Interpretation
-- Documentation and Reporting
+- `work in progress`
 
 ## Tools and Technologies
 - Programming Languages: Python, R
