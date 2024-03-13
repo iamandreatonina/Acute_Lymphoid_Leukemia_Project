@@ -1,6 +1,6 @@
 # Cross-Validated Lasso Model in R
 
-This R code snippet demonstrates the construction of a cross-validated Lasso model using the [`glmnet`](https://glmnet.stanford.edu/index.html) package. 
+This R code snippet demonstrates the construction of a cross-validated Relax Lasso model using the [`glmnet`](https://glmnet.stanford.edu/index.html) package. 
 The Lasso model is a linear regression model with L1 regularization, commonly used for feature selection and regularization in predictive modeling.
 
 ## Code Explanation
