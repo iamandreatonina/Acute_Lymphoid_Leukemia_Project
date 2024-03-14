@@ -48,4 +48,4 @@ lasso_model <- glmnet(X, y,
 - X is the predictor matrix, and y is the response variable.
 - Other parameters include the alpha value, family distribution, parallel processing, type of measurement (mean squared error), and relaxation.
 
-[Coef](coef_lasso.png)
+[Coef](Post-LBDM/after_LASSO_relax/coef_lasso.png)
