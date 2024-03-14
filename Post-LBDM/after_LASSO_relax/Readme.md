@@ -13,16 +13,17 @@ The code is designed to fit a cross-validated Lasso model and then use the optim
 # Fit cross-validated Lasso model
 cv_lasso <- cv.glmnet(x = X,
                       y = Lasso_data$Cell_type, 
-                      alpha = 0.8, 
+                      alpha = 0.5, 
                       grouped = FALSE,
                       parallel = TRUE,
                       relax = TRUE,
                       type.measure = "mse",
+                      family = "gaussian",
                       nfolds = 15)
 ```
 - The cv.glmnet function is used to perform cross-validated Lasso regression.
 - X is the predictor matrix, and Lasso_data$Cell_type is the response variable.
-- L1 regularization is controlled by the alpha parameter (set to 0.8 to do elastic-net).
+- L1 regularization is controlled by the alpha parameter (set to 0.5 to do elastic-net).
 - Other optional parameters include parallel processing, [`relaxation`](https://glmnet.stanford.edu/articles/relax.html), type of measurement (mean squared error), and the number of folds for cross-validation.
 
 ![mse](mse_cv_LASSO.png)
@@ -36,7 +37,7 @@ The optimal regularization parameter (lambda) is selected based on the minimum m
 
 ```R
 lasso_model <- glmnet(X, y, 
-                      alpha = 0.8, 
+                      alpha = 0.5 
                       lambda = optimal_lambda,
                       family = "gaussian",
                       parallel = TRUE,
@@ -45,10 +46,6 @@ lasso_model <- glmnet(X, y,
 ```
 - The glmnet function is used to fit the Lasso model with the optimal lambda value.
 - X is the predictor matrix, and y is the response variable.
-- Other parameters include the alpha value, family distribution (set to "gaussian" for linear regression WORK IN PROGRESS...), parallel processing, type of measurement (mean squared error), and relaxation.
+- Other parameters include the alpha value, family distribution, parallel processing, type of measurement (mean squared error), and relaxation.
 
-Notes
-
-- L1 regularization induces sparsity in the model, promoting feature selection.
-- Cross-validation is employed to find the optimal regularization parameter, reducing the risk of overfitting.
-- Parallel processing is enabled for faster computation 
+[Coef]()
