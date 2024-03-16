@@ -7,10 +7,16 @@
 - `work in progress`
 
 ## Dataset
-- Source: [provide details]
-- Size: [specify size]
-- Format: [describe format]
-
+| Dataset    | Origin_Bone_marrow_or_Blood | Cells                     | Number_Samples | N_Healty_sample | N_tumor_sample | Pediatric_Adult |
+|------------|-----------------------------|---------------------------|----------------|-----------------|----------------|-----------------|
+| GSE84445   | Blood                       | CD4_CD8_T                 | 20             | 20              | 0              | Unknown         |
+| GSE133499  | Both                        | All                       | 42             | 0               | 42             | Pediatric       |
+| GSE181157  | Both                        | All                       | 173            | 0               | 173            | Pediatric       |
+| GSE227832  | Both                        | All                       | 340            | 10              | 330            | Pediatric       |
+| Cohort_7_8 | Unknown                     | All                       | 107            | 0               | 107            | Both            |
+| GSE139073  | Bone                        | Bone marrow stromal cells | 40             | 40              | 0              | Adult           |
+| GSE162562  | Blood                       | All                       | 5              | 5               | 0              | Unknown         |
+| GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
 ## Goals
 - Data Preprocessing
 - Exploratory Data Analysis (EDA)
