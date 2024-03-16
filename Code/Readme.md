@@ -12,6 +12,6 @@ The code is written in R and python, those languages and environments are for st
 
 - [`Gene_exapnsions.py`](Gene_exapnsions.py) The script processes gene expression data, constructs a directed graph using NetworkX, visualizes the graph, selects subgraphs based on specific criteria, and saves relevant data into CSV files for further analysis.
 
-- [`filter_LASSO_relax.Rmd`](filter_LASSO_relax.Rmd) Reads gene expression data from "CPM_HS_LASSO_relax.csv", filters it based on specific criteria for different datasets ("Pre_B_HS", "Pediatric vs adult HS", "Pre_T_HS", "subtypeT_HS", and "TumorvsControl_HS"), and saves the filtered datasets into separate CSV files.
+- [`filter_LASSO_relax.Rmd`](filter_LASSO_relax.Rmd) Reads gene expression data, filters it based on specific criteria for different datasets, and saves the filtered datasets into separate CSV files.
 
 - [``]() `work in progress`
