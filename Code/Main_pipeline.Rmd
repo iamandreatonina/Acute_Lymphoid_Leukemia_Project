@@ -27,21 +27,22 @@ PACKAGES <- c(
   "clusterProfiler",
   "biomaRt",
   "org.Hs.eg.db"
-  
 )
 # Load the specified packages
 invisible(lapply(PACKAGES, library, character.only = TRUE))
 ```
 
-# Load the datasets 
+
+# Load the datasets and manipulation  
 
 ```{r Load datasets,message=FALSE, warning=FALSE}
 
-# Set the working directory to the specified path by user
+
+# Set the working directory, in this way is setted as the path of the current Rmd file
 setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
 
 # Upload human-specific genes from the Excel file 'Human-specific.xlsx'
-Human_genes <- readxl::read_xlsx('Human-specific.xlsx')
+Human_genes<-readxl::read_xlsx('Human-specific.xlsx')
 
 # Load the Tumor dataset from the 'Tumor_dataframe.csv' file
 Tumor <- read.csv('Tumor_dataframe.csv', sep = ',', header = TRUE)

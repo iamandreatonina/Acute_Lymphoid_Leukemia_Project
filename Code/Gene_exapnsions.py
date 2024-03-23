@@ -17,7 +17,9 @@ lista_genes=[]
 
 for dirpath, dirnames, filenames in os.walk(directory): 
     lista_genes_2=[]
+    lista_genes_3=[]
     for filename in filenames: 
+        print(filename)
         #lista_genes_2 =[]
         gene = ''
         #print(dirpath)
@@ -29,6 +31,9 @@ for dirpath, dirnames, filenames in os.walk(directory):
                     nodes.append(dataset.node.iloc[i])
                     lista_genes.append(dataset.node.iloc[i])
                     lista_genes_2.append(dataset.node.iloc[i])
+                if dataset.Fabs.iloc[i] >= (2000*0.80):
+                    lista_genes_3.append(dataset.node.iloc[i])
+
 
         else:
             dataset_2 = pd.read_csv(dirpath+"/"+filename,skiprows=0,header=1)
@@ -47,10 +52,13 @@ for dirpath, dirnames, filenames in os.walk(directory):
                         lista_genes.append(dataset_2.y.iloc[j])
                         #lista_genes_2.append(dataset_2.y.iloc[j])
 
-        print(lista_genes_2)
+        #print(lista_genes_2)
         if len(lista_genes_2) != 0: 
             paperino = pd.DataFrame(lista_genes_2)
             paperino.to_csv('../data/Meaningfull_expantion_90%/'+gene+'.csv', index= True) 
+        if len(lista_genes_3) != 0: 
+            paperino = pd.DataFrame(lista_genes_3)
+            paperino.to_csv('../data/Meaningfull_expantion_80%/'+gene+'.csv', index= True) 
 
 # print(edges)
 # print(nodes)
@@ -74,6 +82,7 @@ for n in G:
 node_degree_dict = nx.degree(G)
 selected = [x for x in G.nodes() if node_degree_dict[x] > 3]
 print(len(selected))
+print(selected)
 G2 =G.subgraph(selected)
 
 color_map2 =[]
@@ -83,8 +92,8 @@ for n in G2:
     else:
         color_map2.append('blue')
 
-#nx.draw(G2,with_labels=True, node_color = color_map2)
-#plt.show()
+nx.draw(G2,with_labels=True, node_color = color_map2)
+plt.show()
 
 
 
@@ -94,7 +103,7 @@ for tupla in G2.edges():
     listona.append(tupla[1])
 
 selected2 = [x for x in G2.nodes() if x in listona]
-print(G2.edges())
+#print(G2.edges())
 
 nodelist=[]
 for node in selected2:
@@ -111,8 +120,8 @@ for n in sub:
         color_map3.append('blue')
 
 
-nx.draw(sub,with_labels=True, node_color = color_map3)
-plt.show()
+# nx.draw(sub,with_labels=True, node_color = color_map3)
+# plt.show()
 
 
 graph_1=['grapl', 'lrrc37a', 'lrrc37a3', 'arl17a', 'stag3']
@@ -135,7 +144,7 @@ nx.draw(sub_graph1,with_labels=True, node_color = color_map4)
 plt.show()
 
 
-graph_3=['tmem236', 'nrxn3', 'mrc1']
+graph_3=['tmem236', 'nrxn3', 'mrc1','cd24'] # new gene hs found connected respect to 99%: cd24
 
 nodelist_graph3=[]
 
@@ -156,7 +165,7 @@ plt.show()
 
 
 
-graph_2=['nbpf14','gtf2i','fam156a']
+graph_2=['nbpf14','gtf2i','fam156a', 'nbpf10'] # nbpf10 is new respect to 99%
 
 nodelist_graph2=[]
 
@@ -175,6 +184,86 @@ for n in sub_graph2:
 nx.draw(sub_graph2,with_labels=True, node_color = color_map5)
 plt.show()
 
+# new graphs
+
+graph_4=['fam72d', 'fam72b', 'fam72a', 'gtf2h2c']
+
+nodelist_graph4=[]
+
+for node in graph_4:
+    nodelist_graph4.extend(list(G.neighbors(n=node)))
+    nodelist_graph4.append(node)
+
+sub_graph4=G.subgraph(nodelist_graph4)
+color_map5 =[]
+for n in sub_graph4:
+    if n.upper() in list(human_spec['Human_specific']):
+        color_map5.append('orange')
+    else:
+        color_map5.append('blue')
+
+nx.draw(sub_graph4,with_labels=True, node_color = color_map5)
+plt.show()
+
+graph_5=['gypa', 'gypb', 'slc4a1']
+
+nodelist_graph5=[]
+
+for node in graph_5:
+    nodelist_graph5.extend(list(G.neighbors(n=node)))
+    nodelist_graph5.append(node)
+
+sub_graph5=G.subgraph(nodelist_graph5)
+color_map6 =[]
+for n in sub_graph5:
+    if n.upper() in list(human_spec['Human_specific']):
+        color_map6.append('orange')
+    else:
+        color_map6.append('blue')
+
+nx.draw(sub_graph5,with_labels=True, node_color = color_map6)
+plt.show()
+
+graph_6=['ddx11', 'ddx12p', 'stag3l1']
+
+nodelist_graph6=[]
+
+for node in graph_6:
+    nodelist_graph6.extend(list(G.neighbors(n=node)))
+    nodelist_graph6.append(node)
+
+sub_graph6=G.subgraph(nodelist_graph6)
+color_map7 =[]
+for n in sub_graph6:
+    if n.upper() in list(human_spec['Human_specific']):
+        color_map7.append('orange')
+    else:
+        color_map7.append('blue')
+
+nx.draw(sub_graph6,with_labels=True, node_color = color_map7)
+plt.show()
+
+graph_7=['znf492', 'nek2', 'znf850']
+
+nodelist_graph7=[]
+
+for node in graph_7:
+    nodelist_graph7.extend(list(G.neighbors(n=node)))
+    nodelist_graph7.append(node)
+
+sub_graph7=G.subgraph(nodelist_graph7)
+color_map8 =[]
+for n in sub_graph7:
+    if n.upper() in list(human_spec['Human_specific']):
+        color_map8.append('orange')
+    else:
+        color_map8.append('blue')
+
+nx.draw(sub_graph7,with_labels=True, node_color = color_map8)
+plt.show()
+
+
+""""
 
 print(lista_genes)
 dataframe=pd.DataFrame(lista_genes)
@@ -203,3 +292,4 @@ dataframe=pd.DataFrame(nodelist_graph2)
 
 dataframe=pd.DataFrame(nodelist_graph3)
 # dataframe.to_csv('../data/Graphs_csv_90%/Graph3_3HS.csv', index=True)
+"""
