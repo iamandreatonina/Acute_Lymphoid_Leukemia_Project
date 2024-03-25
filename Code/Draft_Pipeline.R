@@ -12,7 +12,7 @@ setwd("../data/Datasets/Post_manipulation")
 
 # 88 controls and 705 tumor samples 
 
-##### Upload huamn specific genes 
+##### Upload human specific genes 
 
 Human_genes <- readxl::read_xlsx('Human-specific.xlsx')
 
@@ -54,8 +54,8 @@ ggplot() +
 dev.off()
 
 #creation of batch for tumor and control, so creation of the vectors for batch separation, so check the data!!
-batch_tumor <- c(rep(1,38),rep(2,173),rep(3,321),rep(4,108),rep(5,65))
-batch_control <- c(rep(1,10),rep(2,20),rep(3,40), rep(4,18))
+batch_tumor <- c(rep(1,173),rep(2,321),rep(3,38),rep(4,108),rep(5,65))
+batch_control <- c(rep(1,20),rep(2,10),rep(3,40), rep(4,18))
 
 # application of Combat-Seq and creation of adjusted dataframes 
 tumor_adjusted <- as.data.frame(ComBat_seq(Tumor_2,batch = batch_tumor,group = NULL))
@@ -71,8 +71,9 @@ tumor_adjusted <- add_column(tumor_adjusted, 'ensembl_gene_id' = Tumor$ensembl_g
 
 # We use TMM method , which is a normalization method intra and inter-sample and we create CPM matrices 
 library(edgeR)
-# install.packages('DESeq2')
+#BiocManager::install("DESeq2")
 library(DESeq2)
+
 
 # Let`s check how many human specific genes we have in our dataset
 HSgenes_tumor <- tumor_adjusted %>% dplyr::filter(tumor_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`) 
@@ -227,7 +228,7 @@ edge_t <- glmQLFTest(edge_f,contrast=contro)
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs <- as.data.frame(topTags(edge_t,n=18203,p.value = 0.01,sort.by = "logFC"))
+DEGs <- as.data.frame(topTags(edge_t,n=12976,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -244,10 +245,9 @@ table(DEGs$class)
 #rigth one   -756    + 2693   = 5986
 
 # AFTER ADDING NEW DATA
-#  - 778   + 2107   = 7513
+#  - 736   + 2161   = 7555
   
    
-  
 
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes
@@ -258,7 +258,7 @@ Down_HSgenes <- DEGs[DEGs$class=='-',] %>% dplyr::filter(rownames(DEGs[DEGs$clas
 table(DEGs_Hsgenes$class)
 # after the filter of median more than 5 
 # down-reg 19 and 103 up reg
-# AFTER ADDING 15 down and 82 up 
+# AFTER ADDING 12 down and 85 up 
 
 # Display the results using a volcano plot (x-axes: log FoldChange, y-axes: inverse function of the p-value).
 # We can see the most significant DEGs colored in green, which are genes that surpass a threshold set on both the p-value
@@ -337,7 +337,7 @@ PCA_cpm_log <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_se
 # # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
 PCA_cpm_log_filtered<-PCA_cpm_log[,which(apply(PCA_cpm_log, 2, var) != 0)]
 PCA_cpm_log_filtered<- PCA_cpm_log_filtered[which(apply(PCA_cpm_log_filtered, 1, var) != 0),]
-color<- c(rep('darkgreen',30),rep('indianred',640))
+color<- c(rep('darkgreen',88),rep('indianred',705))
 
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[,which(apply(PCA_cpm_log_nonHS, 2, var) != 0)]
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[which(apply(PCA_cpm_log_nonHS, 1, var) != 0),]
@@ -352,18 +352,18 @@ data.PC_nonHG <- prcomp(t(PCA_cpm_log_nonHS_filtered),scale. = T)
 plot(data.PC_nonHG$x[,1:2],col=color,pch = 19) 
 
 # # PCA plot of tumor only
-data.PC.tumor <- prcomp(t(PCA_cpm_log_filtered[31:670]),scale. = T )
+data.PC.tumor <- prcomp(t(PCA_cpm_log_filtered[89:793]),scale. = T )
 jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
 plot(data.PC.tumor$x[,1:2],pch = 19)
 dev.off()
 
-data.PC_nonHG_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[31:670]),scale. = T )
+data.PC_nonHG_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[89:793]),scale. = T )
 plot(data.PC_nonHG_tumor$x[,1:2],pch = 19)
 
 
 ##### Partitioning around medoids, need to also to install cmake
-# install.packages('factoextra')
-# install.packages('cluster')
+#install.packages('factoextra')
+#install.packages('cluster')
 library(factoextra)
 library(cluster)
 
@@ -453,6 +453,29 @@ fig2_nonHS
 # layout(legend = list(title = list(text = 'color')))
 
 
+# ## Setting controls 
+# info_samples_new_cond$condition<-"AT" 
+# #GSE84445 -> first 20 AH 
+# info_samples_new_cond$condition[1:20]<-"AH"
+# #GSE227832 -> 10 PH
+# info_samples_new_cond$condition[21:30]<-"PH"
+# #GSE139073 -> 40 AH 
+# info_samples_new_cond$condition[31:70] <- 'AH'
+# #GSE115736 -> 18 unkonw +UK
+# 
+# 
+# info_samples_new_cond$condition[31:562] <- 'PT'
+# info_samples_new_cond$condition[info_samples_new_cond$sample %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <-"PT"
+
+# GSE181157, 173 pediatric tumor samples
+# GSE227832, 321 tumor samples, all pediatric from the metadata
+# GSE133499, 38 tumor samples pediatric
+# T_all, 107 tumor samples, both pediatric and adults
+# GSE228632, 65 samples all tumor samples, bone marrow, all pediatric
+
+# SO, we have: 619 sample pediatrici
+# and 85 sample adult (only T!)
+
 clusterino_pam2$type <- 'pediatric'
 clusterino_pam2$type[533:640] <- 'adult'
 #ADJUSTED FOR DIFFERENT AGE CLASSIFICATION BETWEEN THE STUDIES 
@@ -503,7 +526,8 @@ fig6
 #####
 setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
 metadata_nonHS<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
-metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[39:211]
+metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[1:173]
+metadata$`DFCI ID`<- rownames(clusterino_pam2)[1:173]
 
 setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
 
@@ -522,8 +546,21 @@ fig6_nonHS<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk
 fig6_nonHS
 
 #########
-clusterino_pam2$Cell_type <- 'Unkown'
-clusterino_pam2$Cell_type[533:640] <- 'T cell' #by letaruet of only T cells 
+
+
+# GSE181157,GSE227832,GSE133499,T_all,GSE228632
+# GSE181157 is all Pre B and Pre T
+# GSE227832 and GSE228632 is 
+
+# set all teh subtypes as B cells
+clusterino_pam2$Cell_type <- 'B cell'
+# Dataset T-ALL is all T subtype
+clusterino_pam2$Cell_type[533:640] <- 'T cell' #by literature T_ALL is of only T cells 
+
+
+metadata_GSE227832<-  readxl::read_xlsx('Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx' ,header = T)
+clusterino_pam2$Cell_type[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+
 clusterino_pam2$Cell_type[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
 componet4 <- data.PC.tumor$x
 componet4 <- cbind(componet4,clusterino_pam2)
