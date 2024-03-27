@@ -8,7 +8,7 @@ library(stringr)
 
 `%nin%` <- Negate(`%in%`)
 
-setwd("../data/Datasets/Post_manipulation")
+setwd("/Datasets/Post_manipulation")
 
 # 88 controls and 705 tumor samples 
 
@@ -297,7 +297,7 @@ dev.off()
 
 #for improving the clusterization we set the cpm table as logarithmic
 cpm_table_log <- as.data.frame(round(log10(cpm(edge_n_total)+1),2))
-# write.csv(cpm_table_log,file ='Acute_lymphoide_leukemia_cpm_log_expression_table.csv',row.names = T )
+write.csv(cpm_table_log,file ='Acute_lymphoide_leukemia_cpm_log_expression_table.csv',row.names = T )
 
 # moment1 <- read.csv('Acute_lymphoide_leukemia_cpm_log_expression_table.csv')
 # 
@@ -477,9 +477,13 @@ fig2_nonHS
 # and 85 sample adult (only T!)
 
 clusterino_pam2$type <- 'pediatric'
-clusterino_pam2$type[533:640] <- 'adult'
+clusterino_pam2$type[533:640] <- 'adult' # position of the dataset T_all
 #ADJUSTED FOR DIFFERENT AGE CLASSIFICATION BETWEEN THE STUDIES 
+# we add the pediatric of the T_all dataset
 clusterino_pam2$type[rownames(clusterino_pam2) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
+
+
+
 components2 <- as.data.frame(data.PC.tumor$x)
 components2<-cbind(components2, clusterino_pam2)
 components2$PC2 <- -components2$PC2
@@ -502,142 +506,211 @@ fig3_nonHS
 fig4_nonHS<-plot_ly(components2_nonHS, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2_nonHS$type,colors=c('darkred', 'blue4') ,mode='markers')
 fig4_nonHS
 
-
-setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
-metadata<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
-metadata$`DFCI ID` <- rownames(clusterino_pam2)[39:211]
-  
-setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
-
-# metadata$`Final Risk`<- replace(metadata$`Final Risk`, metadata$`Final Risk` == 'Not Available', NA) 
-
-clusterino_pam2$risk <- 'Not Available'
-clusterino_pam2$risk[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
-componet3 <- data.PC.tumor$x
-componet3 <- cbind(componet3,clusterino_pam2)
-componet3$PC2 <- -componet3$PC2 
-
-fig5<-plot_ly(componet3, x=~PC1, y=~PC2, color=clusterino_pam2$risk,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
-fig5
-
-fig6<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk,colors=c('darkred', 'blue4') ,mode='markers')
-fig6
-
-#####
-setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
-metadata_nonHS<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
-metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[1:173]
-metadata$`DFCI ID`<- rownames(clusterino_pam2)[1:173]
-
-setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
+# #### QUESTO DIREI CHE NON SERVE ####
+# setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
+# 
+#   
+# setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
 
 # metadata$`Final Risk`<- replace(metadata$`Final Risk`, metadata$`Final Risk` == 'Not Available', NA) 
 
-clusterino_pam2_nonHS$risk <- 'Not Available'
-clusterino_pam2_nonHS$risk[rownames(clusterino_pam2_nonHS) %in% metadata_nonHS$`DFCI ID`] <- metadata_nonHS$`Final Risk`
-componet3_nonHS <- data.PC_nonHG_tumor$x
-componet3_nonHS <- cbind(componet3_nonHS,clusterino_pam2_nonHS)
-componet3_nonHS$PC2 <- -componet3_nonHS$PC2 
+# clusterino_pam2$risk <- 'Not Available'
+# clusterino_pam2$risk[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+# componet3 <- data.PC.tumor$x
+# componet3 <- cbind(componet3,clusterino_pam2)
+# componet3$PC2 <- -componet3$PC2 
+# 
+# fig5<-plot_ly(componet3, x=~PC1, y=~PC2, color=clusterino_pam2$risk,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+# fig5
+# 
+# fig6<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk,colors=c('darkred', 'blue4') ,mode='markers')
+# fig6
+# 
+# #####
+# setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
+# 
+# 
+# setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Datasets_finals")
+# 
+# # metadata$`Final Risk`<- replace(metadata$`Final Risk`, metadata$`Final Risk` == 'Not Available', NA) 
+# 
+# clusterino_pam2_nonHS$risk <- 'Not Available'
+# clusterino_pam2_nonHS$risk[rownames(clusterino_pam2_nonHS) %in% metadata_nonHS$`DFCI ID`] <- metadata_nonHS$`Final Risk`
+# componet3_nonHS <- data.PC_nonHG_tumor$x
+# componet3_nonHS <- cbind(componet3_nonHS,clusterino_pam2_nonHS)
+# componet3_nonHS$PC2 <- -componet3_nonHS$PC2 
+# 
+# fig5_nonHS<-plot_ly(componet3_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$risk,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+# fig5_nonHS
+# 
+# fig6_nonHS<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk,colors=c('darkred', 'blue4') ,mode='markers')
+# fig6_nonHS
 
-fig5_nonHS<-plot_ly(componet3_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$risk,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
-fig5_nonHS
 
-fig6_nonHS<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk,colors=c('darkred', 'blue4') ,mode='markers')
-fig6_nonHS
 
-#########
+
+#### DA QUI SERVE E FACCIAMO SOTTOTIPI CLASSIFICATION ####
 
 
 # GSE181157,GSE227832,GSE133499,T_all,GSE228632
 # GSE181157 is all Pre B and Pre T
-# GSE227832 and GSE228632 is 
+# GSE227832 and GSE228632 is mixed
+# GSE133499 is mixed
 
-# set all teh subtypes as B cells
-clusterino_pam2$Cell_type <- 'B cell'
+
+# NB SET WORKING DIRECTORY TO WHERE YPU HAVE THE METADATA INFO #
+
+# set all the subtypes as B cells
+clusterino_pam2$Cell_type <- 'B-ALL'
+
+# GSE181157 are the first 173 samples
+metadata<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
+#metadata_nonHS<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
+#metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[1:173]
+metadata$`DFCI ID`<- rownames(clusterino_pam2)[1:173]
+# HERE I KEEP PRE-B AND PRE-T TYPES!
+
+for (row in 1:dim(metadata)[1]){
+  Diagnosis <- metadata$Diagnosis[row]
+  if (Diagnosis=='9836/3 - Pre-B ALL'){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'Pre-B'
+  } else{
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'Pre-T'
+  }
+}
+
+
+
 # Dataset T-ALL is all T subtype
-clusterino_pam2$Cell_type[533:640] <- 'T cell' #by literature T_ALL is of only T cells 
+clusterino_pam2$Cell_type[533:640] <- 'T-ALL' #by literature T_ALL is of only T cells 
+
+# GSE227832 and GSE228632 is mixed
+metadata_GSE227832<-  readxl::read_xlsx('Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx',skip=1, col_names=T)
+for (row in 1:dim(metadata_GSE227832)[1]){
+  Diagnosis<-metadata_GSE227832$`Subtype at ALL diagnosis`[row]
+  if (Diagnosis =='T-ALL'){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- Diagnosis
+  } else{
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- "B-ALL"
+  }
+}
+
+# Dataset GSE133499 is mixed 
+metadata_GSE133499<-  readxl::read_xlsx('Metadata_GSE133499.xlsx', col_names=T) # the column IPT stand for immunephenotype -> ergo: commoni (Btype), pre B and T or unknown
+
+for (row in 1:dim(metadata_GSE133499)[1]){
+  Diagnosis<-metadata_GSE133499$IPT[row]
+  if (Diagnosis=="T"){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "T-ALL"
+  } else if (Diagnosis=="B"){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "B-ALL"
+  } else if (Diagnosis=="pre-B"){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "Pre-B"
+  } else{
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "Unknown"
+  }
+  
+}
 
 
-metadata_GSE227832<-  readxl::read_xlsx('Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx' ,header = T)
-clusterino_pam2$Cell_type[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+table(clusterino_pam2$Cell_type)
+#  B-ALL   Pre-B   Pre-T   T-ALL Unknown 
+#  367     144      37     133      24 
 
-clusterino_pam2$Cell_type[rownames(clusterino_pam2) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
 componet4 <- data.PC.tumor$x
 componet4 <- cbind(componet4,clusterino_pam2)
 componet4$PC2 <- -componet4$PC2
 
-fig7<-plot_ly(componet4, x=~PC1, y=~PC2, color=clusterino_pam2$Cell_type,colors=c('red', 'blue','green') ,type='scatter',mode='markers')
+fig7<-plot_ly(componet4, x=~PC1, y=~PC2, color=clusterino_pam2$Cell_type,colors=c('red', 'blue','green','orange', 'grey') ,type='scatter',mode='markers')
 fig7
 
-fig8<-plot_ly(componet4, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=c('darkred', 'blue4','green','orange') ,mode='markers')
+fig8<-plot_ly(componet4, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=c('darkred', 'blue4','green','orange', 'grey'),type='scatter3d', size=10, mode='markers')
 fig8
 
-clusterino_pam2_nonHS$Cell_type <- 'Unkown'
-clusterino_pam2_nonHS$Cell_type[533:640] <- 'T cell' #by letaruet of only T cells 
-clusterino_pam2_nonHS$Cell_type[rownames(clusterino_pam2_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
-componet4_nonHS <- data.PC_nonHG_tumor$x
-componet4_nonHS <- cbind(componet4_nonHS,clusterino_pam2_nonHS)
-componet4_nonHS$PC2 <- -componet4_nonHS$PC2
+#### Human specific in only tumor ####
 
-fig7_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$Cell_type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
-fig7_nonHS
+data.PC_nonHG_tumor
 
-fig8_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2_nonHS$Cell_typ,colors=c('darkred', 'blue4','green','orange') ,mode='markers')
-fig8_nonHS
+componet7 <- data.PC_nonHG_tumor$x
+componet7 <- cbind(componet7,clusterino_pam2)
+componet7$PC2 <- -componet7$PC2
 
-# ############ 
+fig7<-plot_ly(componet7, x=~PC1, y=~PC2, color=clusterino_pam2$Cell_type,colors=c('red', 'blue','green','orange', 'grey') ,type='scatter',mode='markers')
+fig7
 
-#HS 
-clusterino_pam1<-as.data.frame((pam1$clustering))
-clusterino_pam1$C_T <- "Tumor"
-clusterino_pam1$C_T[rownames(clusterino_pam1) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
-                                                     "TU0051_CD4_HC","TU0051_CD8_HC","TU0054_CD4_HC","TU0054_CD8_HC","XT0130_CD4_HC","XT0130_CD8_HC","XT0133_CD4_HC","XT0133_CD8_HC",
-                                                     "XT0108_CD4_HC","XT0108_CD8_HC","XT0115_CD4_HC","XT0115_CD8_HC","XT0127_CD4_HC","XT0127_CD8_HC","XT0131_CD4_HC","XT0131_CD8_HC",
-                                                     "XT0141_CD4_HC","XT0141_CD8_HC")] <- 'Control'
-clusterino_pam1$type <- 'pediatric'
-clusterino_pam1$type[563:670] <- 'adult'
-clusterino_pam1$type[rownames(clusterino_pam1) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
-clusterino_pam1$type[11:30] <- 'adult'
-clusterino_pam1$risk <- 'Not Available'
-clusterino_pam1$risk[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
-clusterino_pam1$Cell_type <- 'Unkown'
-clusterino_pam1$Cell_type[1:30] <- 'Control'
-clusterino_pam1$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
-clusterino_pam1$Cell_type[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
-component5 <- data.PC$x
-component5<- cbind(component5,clusterino_pam1)
-component5$PC2 <- -component5$PC2
+fig8<-plot_ly(componet7, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=c('darkred', 'blue4','green','orange', 'grey'),type='scatter3d', size=10, mode='markers')
+fig8
 
-### sistemare 
-fig9<-plot_ly(component5, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam1$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"),  symbol = clusterino_pam1$type, symbols = c('diamond','circle'), mode='markers',marker = list(size = 4))
-fig9
 
-#write.csv(component5,file='ML_HS.csv',row.names = T)
-#### Non HS 
-clusterino_pam1_nonHS<-as.data.frame((pam1_nonHS$clustering))
-clusterino_pam1_nonHS$C_T <- "Tumor"
-clusterino_pam1_nonHS$C_T[rownames(clusterino_pam1_nonHS) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
-                                                                 "TU0051_CD4_HC","TU0051_CD8_HC","TU0054_CD4_HC","TU0054_CD8_HC","XT0130_CD4_HC","XT0130_CD8_HC","XT0133_CD4_HC","XT0133_CD8_HC",
-                                                                 "XT0108_CD4_HC","XT0108_CD8_HC","XT0115_CD4_HC","XT0115_CD8_HC","XT0127_CD4_HC","XT0127_CD8_HC","XT0131_CD4_HC","XT0131_CD8_HC",
-                                                                 "XT0141_CD4_HC","XT0141_CD8_HC")] <- 'Control'
-clusterino_pam1_nonHS$type <- 'pediatric'
-clusterino_pam1_nonHS$type[563:670] <- 'adult'
-clusterino_pam1_nonHS$type[rownames(clusterino_pam1_nonHS) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
-clusterino_pam1_nonHS$type[11:30] <- 'adult'
-clusterino_pam1_nonHS$risk <- 'Not Available'
-clusterino_pam1_nonHS$risk[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
-clusterino_pam1_nonHS$Cell_type <- 'Unkown'
-clusterino_pam1_nonHS$Cell_type[1:30] <- 'Control'
-clusterino_pam1_nonHS$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
-clusterino_pam1_nonHS$Cell_type[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
-component6 <- data.PC_nonHG$x
-component6<- cbind(component6,clusterino_pam1_nonHS)
-component6$PC2 <- -component6$PC2
-#write.csv(component6,file='ML_nonHS.csv',row.names = T)
 
-##### sistemare 
-fig9_nonHS<-plot_ly(component6, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam1_nonHS$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"),  symbol = clusterino_pam1_nonHS$type, symbols = c('diamond','circle'), mode='markers',marker = list(size = 4))
-fig9_nonHS
+
+
+# clusterino_pam2_nonHS$Cell_type <- 'Unkown'
+# clusterino_pam2_nonHS$Cell_type[533:640] <- 'T cell' #by letaruet of only T cells 
+# clusterino_pam2_nonHS$Cell_type[rownames(clusterino_pam2_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+# componet4_nonHS <- data.PC_nonHG_tumor$x
+# componet4_nonHS <- cbind(componet4_nonHS,clusterino_pam2_nonHS)
+# componet4_nonHS$PC2 <- -componet4_nonHS$PC2
+# 
+# fig7_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$Cell_type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+# fig7_nonHS
+# 
+# fig8_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2_nonHS$Cell_typ,colors=c('darkred', 'blue4','green','orange') ,mode='markers')
+# fig8_nonHS
+# 
+# # ############ 
+# 
+# #HS 
+# clusterino_pam1<-as.data.frame((pam1$clustering))
+# clusterino_pam1$C_T <- "Tumor"
+# clusterino_pam1$C_T[rownames(clusterino_pam1) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
+#                                                      "TU0051_CD4_HC","TU0051_CD8_HC","TU0054_CD4_HC","TU0054_CD8_HC","XT0130_CD4_HC","XT0130_CD8_HC","XT0133_CD4_HC","XT0133_CD8_HC",
+#                                                      "XT0108_CD4_HC","XT0108_CD8_HC","XT0115_CD4_HC","XT0115_CD8_HC","XT0127_CD4_HC","XT0127_CD8_HC","XT0131_CD4_HC","XT0131_CD8_HC",
+#                                                      "XT0141_CD4_HC","XT0141_CD8_HC")] <- 'Control'
+# clusterino_pam1$type <- 'pediatric'
+# clusterino_pam1$type[563:670] <- 'adult'
+# clusterino_pam1$type[rownames(clusterino_pam1) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
+# clusterino_pam1$type[11:30] <- 'adult'
+# clusterino_pam1$risk <- 'Not Available'
+# clusterino_pam1$risk[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+# clusterino_pam1$Cell_type <- 'Unkown'
+# clusterino_pam1$Cell_type[1:30] <- 'Control'
+# clusterino_pam1$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
+# clusterino_pam1$Cell_type[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+# component5 <- data.PC$x
+# component5<- cbind(component5,clusterino_pam1)
+# component5$PC2 <- -component5$PC2
+# 
+# ### sistemare 
+# fig9<-plot_ly(component5, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam1$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"),  symbol = clusterino_pam1$type, symbols = c('diamond','circle'), mode='markers',marker = list(size = 4))
+# fig9
+# 
+# #write.csv(component5,file='ML_HS.csv',row.names = T)
+# #### Non HS 
+# clusterino_pam1_nonHS<-as.data.frame((pam1_nonHS$clustering))
+# clusterino_pam1_nonHS$C_T <- "Tumor"
+# clusterino_pam1_nonHS$C_T[rownames(clusterino_pam1_nonHS) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
+#                                                                  "TU0051_CD4_HC","TU0051_CD8_HC","TU0054_CD4_HC","TU0054_CD8_HC","XT0130_CD4_HC","XT0130_CD8_HC","XT0133_CD4_HC","XT0133_CD8_HC",
+#                                                                  "XT0108_CD4_HC","XT0108_CD8_HC","XT0115_CD4_HC","XT0115_CD8_HC","XT0127_CD4_HC","XT0127_CD8_HC","XT0131_CD4_HC","XT0131_CD8_HC",
+#                                                                  "XT0141_CD4_HC","XT0141_CD8_HC")] <- 'Control'
+# clusterino_pam1_nonHS$type <- 'pediatric'
+# clusterino_pam1_nonHS$type[563:670] <- 'adult'
+# clusterino_pam1_nonHS$type[rownames(clusterino_pam1_nonHS) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
+# clusterino_pam1_nonHS$type[11:30] <- 'adult'
+# clusterino_pam1_nonHS$risk <- 'Not Available'
+# clusterino_pam1_nonHS$risk[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
+# clusterino_pam1_nonHS$Cell_type <- 'Unkown'
+# clusterino_pam1_nonHS$Cell_type[1:30] <- 'Control'
+# clusterino_pam1_nonHS$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
+# clusterino_pam1_nonHS$Cell_type[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
+# component6 <- data.PC_nonHG$x
+# component6<- cbind(component6,clusterino_pam2)
+# component6$PC2 <- -component6$PC2
+# #write.csv(component6,file='ML_nonHS.csv',row.names = T)
+# 
+# ##### sistemare 
+# fig9_nonHS<-plot_ly(component6, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"), mode='markers',marker = list(size = 4))
+# fig9_nonHS
 
 ##############
 
