@@ -8,24 +8,23 @@ library(stringr)
 
 `%nin%` <- Negate(`%in%`)
 
-setwd("/Datasets/Post_manipulation")
+setwd("../data/Datasets/Post_manipulation")
 
 # 88 controls and 705 tumor samples 
 
-##### Upload human specific genes 
+##### Upload human specific genes and Data ####
 
 Human_genes <- readxl::read_xlsx('Human-specific.xlsx')
-
-##### Batch effect correction 
-
 #Load datasets 
 Tumor <- read.csv('Tumor_dataframe.csv',sep =',',header = T) # needs to be unziped 
 Control <- read.csv('Controls_merged.csv',sep = ',',header = T)
 
+##### Batch effect correction ####
 # We found out a duplicated ensembl_gene_id due to the fact there isn't a 1 to 1 mapping from ensembl_gene_id and hugo_symbols
 # so we are going to eliminate the less informative one 
 
 duplicato <- Tumor$ensembl_gene_id[duplicated(Tumor$ensembl_gene_id)]
+duplicato2 <- Control$ensembl_gene_id[duplicated(Control$ensembl_gene_id)] # <- empty! Perfect!
 #sum <- Tumor %>% dplyr::filter(Tumor$ensembl_gene_id == duplicato) 
 # rowSums(sum[2:641]) # the first one is the most informative so we use distinct()
 Tumor <- distinct(Tumor,ensembl_gene_id,.keep_all =T )
@@ -67,7 +66,7 @@ control_adjusted <- add_column(control_adjusted,'ensembl_gene_id' =Control$ensem
 colnames(tumor_adjusted)
 tumor_adjusted <- add_column(tumor_adjusted, 'ensembl_gene_id' = Tumor$ensembl_gene_id, .before = 'GSM5491718_16.001')
 
-##### Normalization with edgeR package 
+##### Normalization with edgeR package ####
 
 # We use TMM method , which is a normalization method intra and inter-sample and we create CPM matrices 
 library(edgeR)
@@ -152,7 +151,7 @@ dev.off()
 
 # -> noramlizzazione non un granche', come mai? Forse perche' adesso sono tanti? 
 
-###### Differential gene expression analysis 
+###### Differential gene expression analysis ####
 
 total_adjusted <- merge(control_adjusted,tumor_adjusted,by='ensembl_gene_id')
 total_adjusted1 <- total_adjusted %>% column_to_rownames('ensembl_gene_id')
@@ -263,6 +262,8 @@ table(DEGs_Hsgenes$class)
 # Display the results using a volcano plot (x-axes: log FoldChange, y-axes: inverse function of the p-value).
 # We can see the most significant DEGs colored in green, which are genes that surpass a threshold set on both the p-value
 # and the Fold Change.
+
+######### vulcano all gene ####
 jpeg(filename = '../images/Vulcano_plot_DEGs.jpeg')
 input_df<-DEGs
 xlabel<- "log2 FC control vs case"
@@ -272,7 +273,7 @@ plot(DEGs$logFC,-log(DEGs$PValue, base=10), xlab=xlabel,ylab = ylabel, col=ifels
 abline(v = 0, lty = 2, col="grey20")
 dev.off()
 
-######### vulcano hs
+######### vulcano hs ####
 jpeg(filename = '../images/Vulcano_plot_DEGsHS.jpeg')
 input_df<-DEGs_Hsgenes
 xlabel<- "log2 FC control vs case"
@@ -285,6 +286,9 @@ dev.off()
 # We can also represent the genes using a heatmap.
 # A clustering process is operated. We plot only up or down expressed genes using data from both the normalized CPM and
 # the log transformation of the CPM table.
+
+############ heatmap all genes ####
+
 
 col <- rep('chartreuse4', 670)
 col[which(info_samples$condition == 'T')] <- 'burlywood3' 
@@ -309,7 +313,7 @@ jpeg(filename = '../images/Heatmap_plot_DEGs_log.jpeg')
 heatmap(as.matrix(cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)),]),ColSideColors = col, cexCol = 0.5,margins = c(4,4), col = pal, cexRow = 0.2)
 dev.off()
 
-############ heatmap human specific
+############ heatmap human specific ####
 library(plotly)
 
 col <- rep('chartreuse4', 670)
@@ -329,7 +333,7 @@ dev.off()
 
 
 
-##### PCA analysis 
+##### PCA analysis ####
 Diff_expressed <- DEGs[which(DEGs$class != '='),]
 PCA_cpm_log_nonHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed)),]
 PCA_cpm_log <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)),]
@@ -342,16 +346,18 @@ color<- c(rep('darkgreen',88),rep('indianred',705))
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[,which(apply(PCA_cpm_log_nonHS, 2, var) != 0)]
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[which(apply(PCA_cpm_log_nonHS, 1, var) != 0),]
 
-# # PCA plot
+#### PCA plot HS ####
 data.PC <- prcomp(t(PCA_cpm_log_filtered),scale. = T)
 jpeg(filename = '../images/PCA_plot_DEGs_log_HS.jpeg')
 plot(data.PC$x[,1:2],col=color,pch = 19) 
 dev.off()
 
+#### PCA plot all genes####
 data.PC_nonHG <- prcomp(t(PCA_cpm_log_nonHS_filtered),scale. = T)
 plot(data.PC_nonHG$x[,1:2],col=color,pch = 19) 
 
-# # PCA plot of tumor only
+#### PCA plot of tumor only (useless) ####
+# both alll genes and only HS
 data.PC.tumor <- prcomp(t(PCA_cpm_log_filtered[89:793]),scale. = T )
 jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
 plot(data.PC.tumor$x[,1:2],pch = 19)
@@ -361,11 +367,14 @@ data.PC_nonHG_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[89:793]),scale. = T )
 plot(data.PC_nonHG_tumor$x[,1:2],pch = 19)
 
 
-##### Partitioning around medoids, need to also to install cmake
+##### Partitioning around medoids, need to also to install cmake ####
 #install.packages('factoextra')
 #install.packages('cluster')
 library(factoextra)
 library(cluster)
+
+# Non si ripetono a due a due? C'e' qualcosa che non torna !!!
+
 
 # for control-tumor -> 2 clusters as seen from graphs under
 fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10)
@@ -394,7 +403,10 @@ pam1_nonHS <- eclust(data.PC_nonHG$x,'pam',k=9)
 # PAM tumors subtypes
 pam2<-eclust(data.PC.tumor$x, "pam", k=8)
 pam2_nonHS <- eclust(data.PC_nonHG_tumor$x,'pam',k=8)
-##### hierarchical clustering
+
+
+##### hierarchical clustering ####
+#fanno schifo  
 
 #calculate distances between observations and create a simple dendogram
 dm <- dist(data.PC$x)
@@ -423,10 +435,8 @@ components$PC2<- -components$PC2
 
 components$`(pam2$clustering)` <- as.factor(components$`(pam2$clustering)`)
 
-fig<-plot_ly(components, x=~PC1, y=~PC2, color=clusterino_pam2$`(pam2$clustering)`,colors=c('cadetblue1', 'red', 
-'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
+fig<-plot_ly(components, x=~PC1, y=~PC2, color=clusterino_pam2$`(pam2$clustering)`,colors=c('cadetblue1', 'red', 'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
 # layout(legend = list(title = list(text = 'color')))
-
 fig
 
 
@@ -561,10 +571,10 @@ fig4_nonHS
 # NB SET WORKING DIRECTORY TO WHERE YPU HAVE THE METADATA INFO #
 
 # set all the subtypes as B cells
-clusterino_pam2$Cell_type <- 'B-ALL'
+clusterino_pam2$Cell_type <- 'B'
 
 # GSE181157 are the first 173 samples
-metadata<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
+metadata<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
 #metadata_nonHS<-  readxl::read_xlsx('GSE181157_SampleMetadata.xlsx')
 #metadata_nonHS$`DFCI ID` <- rownames(clusterino_pam2_nonHS)[1:173]
 metadata$`DFCI ID`<- rownames(clusterino_pam2)[1:173]
@@ -573,39 +583,42 @@ metadata$`DFCI ID`<- rownames(clusterino_pam2)[1:173]
 for (row in 1:dim(metadata)[1]){
   Diagnosis <- metadata$Diagnosis[row]
   if (Diagnosis=='9836/3 - Pre-B ALL'){
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'Pre-B'
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'PreB'
   } else{
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'Pre-T'
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata$`DFCI ID`[row]] <- 'PreT'
   }
 }
 
 
 
 # Dataset T-ALL is all T subtype
-clusterino_pam2$Cell_type[533:640] <- 'T-ALL' #by literature T_ALL is of only T cells 
+clusterino_pam2$Cell_type[533:640] <- 'T' #by literature T_ALL is of only T cells 
 
 # GSE227832 and GSE228632 is mixed
-metadata_GSE227832<-  readxl::read_xlsx('Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx',skip=1, col_names=T)
+metadata_GSE227832<-  readxl::read_xlsx('../Tumors/Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx',skip=1, col_names=T) # non ho questa cartella, manco su github
+
+table(metadata_GSE227832$`Subtype at ALL diagnosis`)
+
 for (row in 1:dim(metadata_GSE227832)[1]){
   Diagnosis<-metadata_GSE227832$`Subtype at ALL diagnosis`[row]
   if (Diagnosis =='T-ALL'){
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- Diagnosis
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- 'T'
   } else{
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- "B-ALL"
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- "B"
   }
 }
 
 # Dataset GSE133499 is mixed 
-metadata_GSE133499<-  readxl::read_xlsx('Metadata_GSE133499.xlsx', col_names=T) # the column IPT stand for immunephenotype -> ergo: commoni (Btype), pre B and T or unknown
+metadata_GSE133499<-  readxl::read_xlsx('../Tumors/Metadata_GSE133499.xlsx', col_names=T) # the column IPT stand for immunephenotype -> ergo: commoni (Btype), pre B and T or unknown
 
 for (row in 1:dim(metadata_GSE133499)[1]){
   Diagnosis<-metadata_GSE133499$IPT[row]
   if (Diagnosis=="T"){
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "T-ALL"
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "T"
   } else if (Diagnosis=="B"){
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "B-ALL"
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "B"
   } else if (Diagnosis=="pre-B"){
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "Pre-B"
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "PreB"
   } else{
     clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE133499$`Anonym ID`[row]] <- "Unknown"
   }
@@ -627,7 +640,7 @@ fig7
 fig8<-plot_ly(componet4, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=c('darkred', 'blue4','green','orange', 'grey'),type='scatter3d', size=10, mode='markers')
 fig8
 
-#### Human specific in only tumor ####
+#### All genes in only tumor ####
 
 data.PC_nonHG_tumor
 
@@ -642,25 +655,10 @@ fig8<-plot_ly(componet7, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,
 fig8
 
 
-
-
-
-# clusterino_pam2_nonHS$Cell_type <- 'Unkown'
-# clusterino_pam2_nonHS$Cell_type[533:640] <- 'T cell' #by letaruet of only T cells 
-# clusterino_pam2_nonHS$Cell_type[rownames(clusterino_pam2_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
-# componet4_nonHS <- data.PC_nonHG_tumor$x
-# componet4_nonHS <- cbind(componet4_nonHS,clusterino_pam2_nonHS)
-# componet4_nonHS$PC2 <- -componet4_nonHS$PC2
-# 
-# fig7_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$Cell_type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
-# fig7_nonHS
-# 
-# fig8_nonHS<-plot_ly(componet4_nonHS, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2_nonHS$Cell_typ,colors=c('darkred', 'blue4','green','orange') ,mode='markers')
-# fig8_nonHS
 # 
 # # ############ 
 # 
-# #HS 
+# #HS
 # clusterino_pam1<-as.data.frame((pam1$clustering))
 # clusterino_pam1$C_T <- "Tumor"
 # clusterino_pam1$C_T[rownames(clusterino_pam1) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
@@ -675,18 +673,18 @@ fig8
 # clusterino_pam1$risk[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
 # clusterino_pam1$Cell_type <- 'Unkown'
 # clusterino_pam1$Cell_type[1:30] <- 'Control'
-# clusterino_pam1$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
+# clusterino_pam1$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells
 # clusterino_pam1$Cell_type[rownames(clusterino_pam1) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
 # component5 <- data.PC$x
 # component5<- cbind(component5,clusterino_pam1)
 # component5$PC2 <- -component5$PC2
 # 
-# ### sistemare 
+# ### sistemare
 # fig9<-plot_ly(component5, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam1$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"),  symbol = clusterino_pam1$type, symbols = c('diamond','circle'), mode='markers',marker = list(size = 4))
 # fig9
 # 
 # #write.csv(component5,file='ML_HS.csv',row.names = T)
-# #### Non HS 
+# #### Non HS
 # clusterino_pam1_nonHS<-as.data.frame((pam1_nonHS$clustering))
 # clusterino_pam1_nonHS$C_T <- "Tumor"
 # clusterino_pam1_nonHS$C_T[rownames(clusterino_pam1_nonHS) %in% c("X817_T","X845_B","X845_T","X858_B","X858_T","X867_B","X867_T","X899_B","X899_T","X817_B","TU0049_CD4_HC","TU0049_CD8_HC",
@@ -701,16 +699,46 @@ fig8
 # clusterino_pam1_nonHS$risk[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$`Final Risk`
 # clusterino_pam1_nonHS$Cell_type <- 'Unkown'
 # clusterino_pam1_nonHS$Cell_type[1:30] <- 'Control'
-# clusterino_pam1_nonHS$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells 
+# clusterino_pam1_nonHS$Cell_type[563:670] <- 'T Cell' #by letaruet of only T cells
 # clusterino_pam1_nonHS$Cell_type[rownames(clusterino_pam1_nonHS) %in% metadata$`DFCI ID`] <- metadata$Diagnosis
 # component6 <- data.PC_nonHG$x
 # component6<- cbind(component6,clusterino_pam2)
 # component6$PC2 <- -component6$PC2
 # #write.csv(component6,file='ML_nonHS.csv',row.names = T)
 # 
-# ##### sistemare 
+# ##### sistemare
 # fig9_nonHS<-plot_ly(component6, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$Cell_type,colors=brewer.pal(n = 4, name = "RdBu"), mode='markers',marker = list(size = 4))
 # fig9_nonHS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ##############
 
@@ -821,24 +849,17 @@ dotplot(ego_BP_DW_HS)
 heatplot(ego_BP_DW_HS, showCategory = 2)
 
 
-############ ############# DEGs
-
-#### DEG subtype vs subtype without controls
+#### DEG subtype vs subtype without controls ####
 
 # creating a dataframe containing the info on the samples, this is needed to be able to perform the DGE
 
 # clusterino_pam2 contains in Cell type columns the info on the subtypes
 info_subtypes<-clusterino_pam2
 info_subtypes$sample<-rownames(info_subtypes)
-info_subtypes<-info_subtypes[info_subtypes$Cell_type!="Unkown",]
+info_subtypes<-info_subtypes[info_subtypes$Cell_type!="Unknown",]
 tumors_subtype<-tumor_adjusted1[colnames(tumor_adjusted1) %in% rownames(info_subtypes)]
 
 
-# Now we can create the DGEList object
-# edge_c_total <- DGEList(counts = total_adjusted1, group=info_samples$condition, samples=info_samples, genes=total_adjusted1)
-# edge_n_total <- calcNormFactors(edge_c_total,method = 'TMM')
-
-#######
 edge_c_subtypes <- DGEList(counts = tumors_subtype, group=info_subtypes$Cell_type, samples=info_subtypes, genes=tumors_subtype)
 edge_n_subtypes <- calcNormFactors(edge_c_subtypes,method = 'TMM')
 # We create the cpm table
@@ -849,9 +870,9 @@ cpm_table_subtypes <-as.data.frame(round(cpm(edge_n_subtypes),2)) # the library 
 design_subtype <- model.matrix(~0+group, data = edge_n_subtypes$samples, contrast.arg=list(group='contr.sum'))
 colnames(design_subtype) <- levels(edge_n_subtypes$samples$group)
 rownames(design_subtype) <- edge_n_subtypes$samples$sample
-#design_subtype[,'T cell']<-design_subtype[,'T cell']/2
-#design_subtype[,'9837/3 - Pre-T ALL']<-design_subtype[,'9837/3 - Pre-T ALL']/2
-colnames(design_subtype)<-c("PreB", "PreT", "T")
+
+
+colnames(design_subtype)<-c("B","PreB", "PreT", "T")
 
 
 # Calculate dispersion and fit the result with edgeR (necessary for differential expression analysis)
@@ -860,18 +881,22 @@ edge_d_subtype <- estimateDisp(edge_n_subtypes,design_subtype)
 # Fit the data we model the data using a negative binomial distribution
 edge_f_subtype<-glmQLFit(edge_d_subtype, design_subtype)
 
+####PreB vs all other subtype####
+
 # Definition of the contrast (conditions to be compared)
-contro_subtype_B <- makeContrasts("PreB-(PreT+T)/2", levels=design_subtype)
+contro_subtype_PreB <- makeContrasts("PreB-(PreT+T+B)/3", levels=design_subtype)
 #contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
 
 # Fit the model with generalized linear models
-edge_t_subtype_B <- glmQLFTest(edge_f_subtype,contrast=contro_subtype_B)
+edge_t_subtype_PreB <- glmQLFTest(edge_f_subtype,contrast=contro_subtype_PreB)
 
 # edge_t contains the results of the DE analysis
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B,n=21420,p.value = 0.01,sort.by = "logFC"))
+
+# the n are the number of row. this case 21376
+DEGs_subtype_PreB <- as.data.frame(topTags(edge_t_subtype_PreB,n=21376,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -879,24 +904,32 @@ DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B,n=21420,p.value = 0.01,
 # and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
 # correspond to the 3.7% of the total and the down regulated are the 16% of the total.
 
-DEGs_subtype_B$class <- '='
-DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC > 1.5)] = '+'
-DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC < (-1.5))] = '-'
-DEGs_subtype_B <- DEGs_subtype_B[order(DEGs_subtype_B$logFC, decreasing = T),] # we order based on the fold change
+DEGs_subtype_PreB$class <- '='
+DEGs_subtype_PreB$class[which(DEGs_subtype_PreB$logCPM > 1 & DEGs_subtype_PreB$logFC > 1.5)] = '+'
+DEGs_subtype_PreB$class[which(DEGs_subtype_PreB$logCPM > 1 & DEGs_subtype_PreB$logFC < (-1.5))] = '-'
+DEGs_subtype_PreB <- DEGs_subtype_PreB[order(DEGs_subtype_PreB$logFC, decreasing = T),] # we order based on the fold change
 
-table(DEGs_subtype_B$class)
+table(DEGs_subtype_PreB$class)
 # +: 462  -:432     =: 7894 
 
-# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
-#  We have 22 down-reg HS genes and 16 up-regulated HS genes
-DEGs_subtype_B_HS <- DEGs_subtype_B %>% dplyr::filter(rownames(DEGs_subtype_B) %in% Human_genes$`Ensembl ID`)
-Up_HS_PreB <- DEGs_subtype_B[DEGs_subtype_B$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class=='+',]) %in% Human_genes$`Ensembl ID`) 
-Down_HS_PreB<- DEGs_subtype_B[DEGs_subtype_B$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+# with new samples -327    +276    =8394 
+   
 
-# Subtype PreT vs all
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+
+DEGs_subtype_PreB_HS <- DEGs_subtype_PreB %>% dplyr::filter(rownames(DEGs_subtype_PreB) %in% Human_genes$`Ensembl ID`)
+Up_HS_PreB <- DEGs_subtype_PreB[DEGs_subtype_PreB$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_PreB<- DEGs_subtype_PreB[DEGs_subtype_PreB$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_PreB_HS$class)
+# with new samples -24   +8   =237
+     
+
+
+#### Subtype PreT vs all the others ####
 
 # Definition of the contrast (conditions to be compared)
-contro_subtype_PT <- makeContrasts("PreT-(PreB+T)/2", levels=design_subtype)
+contro_subtype_PT <- makeContrasts("PreT-(PreB+T+B)/3", levels=design_subtype)
 #contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
 
 # Fit the model with generalized linear models
@@ -906,7 +939,9 @@ edge_t_subtype_PT<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_PT)
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs_subtype_PT <- as.data.frame(topTags(edge_t_subtype_PT,n=21420,p.value = 0.01,sort.by = "logFC"))
+
+# the n are the number of row. this case 21376
+DEGs_subtype_PT <- as.data.frame(topTags(edge_t_subtype_PT,n=21376,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -920,19 +955,25 @@ DEGs_subtype_PT$class[which(DEGs_subtype_PT$logCPM > 1 & DEGs_subtype_PT$logFC <
 DEGs_subtype_PT <- DEGs_subtype_PT[order(DEGs_subtype_PT$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_PT$class)
-# +: 482  -:848   =: 6773 
+# +: 482  -:848   =: 6773
+
+# with new samples  - 868    + 371   = 6809
+    
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
-#  We have 32 down-reg HS genes and 16 up-regulated HS genes
 DEGs_subtype_PT_HS <- DEGs_subtype_PT %>% dplyr::filter(rownames(DEGs_subtype_PT) %in% Human_genes$`Ensembl ID`)
 Up_HS_PreT <- DEGs_subtype_PT[DEGs_subtype_PT$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class=='+',]) %in% Human_genes$`Ensembl ID`) 
 Down_HS_PreT<- DEGs_subtype_PT[DEGs_subtype_PT$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
-# T subtype vs all
-# Subtype PreT vs all
+table(DEGs_subtype_PT_HS$class)
+#  We have 32 down-reg HS genes and 16 up-regulated HS genes
+# with new samples   - 45  + 14   = 186
+    
+
+#### T subtype vs all other subtypes ####
 
 # Definition of the contrast (conditions to be compared)
-contro_subtype_T <- makeContrasts("T-(PreB+PreT)/2", levels=design_subtype)
+contro_subtype_T <- makeContrasts("T-(PreB+PreT+B)/3", levels=design_subtype)
 #contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
 
 # Fit the model with generalized linear models
@@ -942,7 +983,10 @@ edge_t_subtype_T<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_T)
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs_subtype_T <- as.data.frame(topTags(edge_t_subtype_T,n=21420,p.value = 0.01,sort.by = "logFC"))
+
+# the n are the number of row. this case 21376
+
+DEGs_subtype_T <- as.data.frame(topTags(edge_t_subtype_T,n=21376,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -958,25 +1002,231 @@ DEGs_subtype_T <- DEGs_subtype_T[order(DEGs_subtype_T$logFC, decreasing = T),] #
 table(DEGs_subtype_T$class)
 # +: 381  -:16   =: 3848 
 
+# with new samples    - 16   + 285   = 3417
+    
+
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
-#  We have 0 down-reg HS genes and 33 up-regulated HS genes
 DEGs_subtype_T_HS <- DEGs_subtype_T %>% dplyr::filter(rownames(DEGs_subtype_T) %in% Human_genes$`Ensembl ID`)
 Up_HS_T <- DEGs_subtype_T[DEGs_subtype_T$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class=='+',]) %in% Human_genes$`Ensembl ID`) 
 Down_HS_T<- DEGs_subtype_T[DEGs_subtype_T$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
-#### COMPARISON BETWEEN THE HS IN THE 3 SUBTYPES -> NOT sure of the code
-Common_T_PT <- Up_HS_T[rownames(Up_HS_T) %in% rownames(Up_HS_PreT),]
-# 3 in common!
-Common_PT_PB <- Up_HS_PreT[rownames(Up_HS_PreT) %in% rownames(Up_HS_PreB),]
-# 0 in common
-Common_T_PB <- Up_HS_T[rownames(Up_HS_T) %in% rownames(Up_HS_PreB),]
-# 4 in common
-Common_T_PT_D <- Down_HS_T[rownames(Down_HS_T) %in% rownames(Down_HS_PreT),]
-# 0 in common
-Common_T_PB_D <- Down_HS_T[rownames(Down_HS_T) %in% rownames(Down_HS_PreB),]
-# 0 in common
-Common_PT_PB_D <- Down_HS_PreT[rownames(Down_HS_PreT) %in% rownames(Down_HS_PreB),]
-# 6 in common -> PreB has 22 down hs while PreT 23
+table(DEGs_subtype_T_HS$class)
+#  We have 0 down-reg HS genes and 33 up-regulated HS genes
+# with new samples +34   = 111
+ 
+
+
+#### B subtype vs all other subtypes ####
+
+# Definition of the contrast (conditions to be compared)
+contro_subtype_B <- makeContrasts("B-(PreB+PreT+T)/3", levels=design_subtype)
+#contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
+
+# Fit the model with generalized linear models
+edge_t_subtype_B<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_B)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 21376
+
+DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B,n=21376,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_subtype_B$class <- '='
+DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC > 1.5)] = '+'
+DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC < (-1.5))] = '-'
+DEGs_subtype_B <- DEGs_subtype_B[order(DEGs_subtype_B$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_subtype_B$class)
+# +: 293  -:51   =: 6928 
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+DEGs_subtype_B_HS <- DEGs_subtype_B %>% dplyr::filter(rownames(DEGs_subtype_B) %in% Human_genes$`Ensembl ID`)
+Up_HS_B <- DEGs_subtype_B[DEGs_subtype_B$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_B<- DEGs_subtype_B[DEGs_subtype_B$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_B_HS$class)
+# with new samples -2 +31 = 233
+
+
+
+
+#### COMPARISON BETWEEN THE HS IN THE 4 SUBTYPES ####
+
+# NB: done in this way otherwise by using for example DEGs HS of T vs DEGs HS of PreT then can be some matches that are not supposed to be done 
+
+## Up vs Up 
+Up_HS_T_unique <- Up_HS_T[rownames(Up_HS_T) %nin% c(rownames(Up_HS_PreT),rownames(Up_HS_PreB),rownames(Up_HS_B)),]
+table(Up_HS_T_unique$class) # 3+ 
+
+Up_HS_PreT_unique <-  Up_HS_PreT[rownames(Up_HS_PreT) %nin% c(rownames(Up_HS_T),rownames(Up_HS_PreB),rownames(Up_HS_B)),]
+table(Up_HS_PreT_unique$class) #9+ 
+
+Up_HS_PreB_unique <- Up_HS_PreB[rownames(Up_HS_PreB) %nin% c(rownames(Up_HS_T),rownames(Up_HS_PreT),rownames(Up_HS_B)),]
+table(Up_HS_PreB_unique$class) # 4+ 
+
+Up_HS_B_unique <- Up_HS_B[rownames(Up_HS_B) %nin% c(rownames(Up_HS_PreT),rownames(Up_HS_PreB),rownames(Up_HS_T)),]
+table(Up_HS_B_unique$class) # 3+ 
+
+## Down vs Down
+Down_HS_T_unique <- Down_HS_T[rownames(Down_HS_T) %nin% c(rownames(Down_HS_PreT),rownames(Down_HS_PreB),rownames(Down_HS_B)),]
+table(Down_HS_T_unique$class) # 0! becasue we didn't have any down reg 
+
+Down_HS_B_unique <- Down_HS_B[rownames(Down_HS_B) %nin% c(rownames(Down_HS_PreT),rownames(Down_HS_PreB),rownames(Down_HS_T)),]
+table(Down_HS_B_unique$class) # 0! 
+
+Down_HS_PreB_unique <-Down_HS_PreB[rownames(Down_HS_PreB) %nin% c(rownames(Down_HS_PreT),rownames(Down_HS_B),rownames(Down_HS_T)),]
+table(Down_HS_PreB_unique$class) # 11 - 
+
+Down_HS_PreT_unique <-Down_HS_PreT[rownames(Down_HS_PreT) %nin% c(rownames(Down_HS_PreB),rownames(Down_HS_B),rownames(Down_HS_T)),]
+table(Down_HS_PreT_unique$class) # 34 - 
+
+# Results of DEGS of HS without commons 
+
+# Pre B with new samples 4+ 11-
+# Pre T # with new samples 34- 9+ 
+# T with new samples 3+ 0- 
+# B with new samples 3+ 0- 
+
+
+Total_HS_unqiue <- c(rownames(Up_HS_B_unique),rownames(Down_HS_B_unique),rownames(Up_HS_T_unique),rownames(Down_HS_T_unique),rownames(Up_HS_PreB_unique),rownames(Down_HS_PreB_unique),
+                     rownames(Up_HS_PreT_unique),rownames(Down_HS_PreT_unique))
+
+
+
+#### UMAP DEGs tumors only HS  #### 
+library(umap)
+
+cpm_table_subtypes_log <- as.data.frame(round(log10(cpm(edge_n_subtypes)+1),2))
+Subtype_cpm_log_only_HS <- cpm_table_subtypes_log[which(rownames(cpm_table_subtypes_log) %in% Total_HS_unqiue),]
+Subtype_cpm_log_only_HS_filtered <- Subtype_cpm_log_only_HS[,which(apply(Subtype_cpm_log_only_HS, 2, var) != 0)]
+Subtype_cpm_log_only_HS_filtered <- Subtype_cpm_log_only_HS_filtered[which(apply(Subtype_cpm_log_only_HS_filtered, 1, var) != 0),]
+
+
+
+# Perform UMAP dimensionality reduction
+umap_result4 <- umap(t(Subtype_cpm_log_only_HS_filtered),
+                     n_neighbors = 5,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+
+
+umap_result4 <- umap(t(Subtype_cpm_log_only_HS_filtered),
+                     n_neighbors = 15,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+umap_result4 <- umap(t(Subtype_cpm_log_only_HS_filtered),
+                    n_neighbors = sqrt(dim(t(Subtype_cpm_log_only_HS_filtered))[1]),         #or the square root of the rows 
+                    min_dist = 0.1,          #
+                    metric = "euclidean",    #you can change it
+                    n_components = 3
+)
+
+clusterino_umap_subtypes <- clusterino_pam2[clusterino_pam2$Cell_type != 'Unknown',]
+umap_df4 <- data.frame(umap_result4$layout,
+                       Cell_type = clusterino_umap_subtypes$Cell_type)
+
+colnames(umap_df4) <- c("umap_1","umap_2","umap_3", "Cell_type")
+rownames(umap_df4) <-  rownames(t(Subtype_cpm_log_only_HS_filtered))
+# Print UMAP
+print(umap_result4)
+
+#umap_df <- cbind(umap_df,disease_state)
+# Create a 2D scatter plot using Plotly
+fig2U <- plot_ly(umap_df4, 
+                 x = ~umap_1, y = ~umap_2, z = ~umap_3,
+                 color = umap_df4$Cell_type,
+                 colors = c("blue","red","green","orange", "grey"),   
+                 mode = 'markers',
+                 size=10) %>% layout(title = 'Tumor subtypes HS, metric euclidian, neighbors = square')
+
+# Display the 2D scatter plot
+fig2U
+
+
+
+#### UMAP without HS genes ####
+
+DEGs_subtype_B_without_HS<-DEGs_subtype_B[DEGs_subtype_B$class != '=',]
+DEGs_subtype_B_without_HS<-DEGs_subtype_B_without_HS[rownames(DEGs_subtype_B_without_HS) %nin% Human_genes$`Ensembl ID`,]
+
+DEGs_subtype_T_without_HS<-DEGs_subtype_T[DEGs_subtype_T$class != '=',]
+DEGs_subtype_T_without_HS<-DEGs_subtype_T_without_HS[rownames(DEGs_subtype_T_without_HS) %nin% Human_genes$`Ensembl ID`,]
+
+DEGs_subtype_PreT_without_HS<-DEGs_subtype_PT[DEGs_subtype_PT$class != '=',]
+DEGs_subtype_PreT_without_HS<-DEGs_subtype_PreT_without_HS[rownames(DEGs_subtype_PreT_without_HS) %nin% Human_genes$`Ensembl ID`,]
+
+DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB[DEGs_subtype_PreB$class != '=',]
+DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB_without_HS[rownames(DEGs_subtype_PreB_without_HS) %nin% Human_genes$`Ensembl ID`,]
+
+Total_without_HS_unique <- c(rownames(DEGs_subtype_PreB_without_HS),rownames(DEGs_subtype_PreT_without_HS),rownames(DEGs_subtype_T_without_HS),rownames(DEGs_subtype_B_without_HS))
+
+
+Subtype_cpm_log_without_HS <- cpm_table_subtypes_log[which(rownames(cpm_table_subtypes_log) %in% Total_without_HS_unique),]
+Subtype_cpm_log_without_HS_filtered <- Subtype_cpm_log_without_HS[,which(apply(Subtype_cpm_log_without_HS, 2, var) != 0)]
+Subtype_cpm_log_without_HS_filtered <- Subtype_cpm_log_without_HS_filtered[which(apply(Subtype_cpm_log_without_HS_filtered, 1, var) != 0),]
+
+
+
+# Perform UMAP dimensionality reduction
+umap_result5 <- umap(t(Subtype_cpm_log_without_HS_filtered),
+                     n_neighbors = 5,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+
+
+umap_result5 <- umap(t(Subtype_cpm_log_without_HS_filtered),
+                     n_neighbors = 15,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+umap_result5 <- umap(t(Subtype_cpm_log_without_HS_filtered),
+                     n_neighbors = sqrt(dim(t(Subtype_cpm_log_without_HS_filtered))[1]),         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+#clusterino_umap_subtypes <- clusterino_pam2[clusterino_pam2$Cell_type != 'Unknown',]
+umap_df5 <- data.frame(umap_result5$layout,
+                       Cell_type = clusterino_umap_subtypes$Cell_type)
+
+colnames(umap_df5) <- c("umap_1","umap_2","umap_3", "Cell_type")
+rownames(umap_df5) <-  rownames(t(Subtype_cpm_log_without_HS_filtered))
+# Print UMAP
+print(umap_result5)
+
+#umap_df <- cbind(umap_df,disease_state)
+# Create a 2D scatter plot using Plotly
+fig3U <- plot_ly(umap_df5, 
+                 x = ~umap_1, y = ~umap_2, z = ~umap_3,
+                 color = umap_df4$Cell_type,
+                 colors = c("blue","red","green","orange", "grey"),   
+                 mode = 'markers',
+                 size=10)  %>% layout(title = 'Tumor subtypes without HS, metric euclidian, neighbors = square')
+
+# Display the 2D scatter plot
+fig3U
 
 ## FIle creation
 #write.csv(DEGs_subtype_T,file = 'DEGs_subtype_T.csv',row.names = T, col.names = T)
@@ -985,18 +1235,12 @@ Common_PT_PB_D <- Down_HS_PreT[rownames(Down_HS_PreT) %in% rownames(Down_HS_PreB
 
 #write.csv(DEGs_subtype_B,file = 'DEGs_subtype_B.csv',row.names = T, col.names = T)
 
-############ DEG adults vs pediatric
 
-# creating a dataframe containing the info on the samples, this is needed to be able to perform the DGE
+############ DEG adults vs pediatric of coruse just tumor ###### 
 
 # clusterino_pam2 contains in Cell type columns the info on the subtypes
 info_age<-clusterino_pam2
 
-# Now we can create the DGEList object
-# edge_c_total <- DGEList(counts = total_adjusted1, group=info_samples$condition, samples=info_samples, genes=total_adjusted1)
-# edge_n_total <- calcNormFactors(edge_c_total,method = 'TMM')
-
-#######
 edge_c_age <- DGEList(counts = tumor_adjusted1, group=info_age$type, samples=info_age, genes=tumor_adjusted1)
 edge_n_age <- calcNormFactors(edge_c_age,method = 'TMM')
 # We create the cpm table
@@ -1026,7 +1270,10 @@ edge_t_age<- glmQLFTest(edge_f_age,contrast=contro_age)
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs_age <- as.data.frame(topTags(edge_t_age,n=21420,p.value = 0.01,sort.by = "logFC"))
+
+# the n are the number of row. this case 21376
+
+DEGs_age <- as.data.frame(topTags(edge_t_age,n=21376,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -1040,14 +1287,132 @@ DEGs_age$class[which(DEGs_age$logCPM > 1 & DEGs_age$logFC < (-1.5))] = '-'
 DEGs_age <- DEGs_age[order(DEGs_age$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_age$class)
-# +:55 -: 108  =: 3508  
+# +:59 -: 100  =: 3606
      
-
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in pediatric cancer
-#  We have 10 down-reg HS genes and 6 up-regulated HS genes
 DEGs_age_HS <- DEGs_age %>% dplyr::filter(rownames(DEGs_age) %in% Human_genes$`Ensembl ID`)
 Up_HS_age <- DEGs_age[DEGs_age$class=='+',] %>% dplyr::filter(rownames(DEGs_age[DEGs_age$class=='+',]) %in% Human_genes$`Ensembl ID`) 
 Down_HS_age<- DEGs_age[DEGs_age$class=='-',] %>% dplyr::filter(rownames(DEGs_age[DEGs_age$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_age_HS$class)
+#  We have 8 down-reg HS genes and 6 up-regulated HS genes
+
+
+#### UMAP DEGs pediatric-adult only HS  #### 
+library(umap)
+
+Totalage_HS_unique <- rownames(DEGs_age_HS[DEGs_age_HS$class != '=',])
+
+cpm_table_age_log <- as.data.frame(round(log10(cpm(edge_n_age)+1),2))
+Age_cpm_log_only_HS <- cpm_table_age_log[which(rownames(cpm_table_age_log) %in% Totalage_HS_unique),]
+Age_cpm_log_only_HS_filtered <- Age_cpm_log_only_HS[,which(apply(Age_cpm_log_only_HS, 2, var) != 0)]
+Age_cpm_log_only_HS_filtered <- Age_cpm_log_only_HS_filtered[which(apply(Age_cpm_log_only_HS_filtered, 1, var) != 0),]
+
+# Perform UMAP dimensionality reduction
+umap_result6 <- umap(t(Age_cpm_log_only_HS_filtered),
+                     n_neighbors = 5,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+
+
+umap_result6 <- umap(t(Age_cpm_log_only_HS_filtered),
+                     n_neighbors = 15,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+umap_result6 <- umap(t(Age_cpm_log_only_HS_filtered),
+                     n_neighbors = sqrt(dim(t(Age_cpm_log_only_HS_filtered))[1]),         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+clusterino_umap_age <- clusterino_pam2$type
+umap_df6 <- data.frame(umap_result6$layout,
+                       Cell_type = clusterino_umap_age)
+
+colnames(umap_df6) <- c("umap_1","umap_2","umap_3", "Age")
+rownames(umap_df6) <-  rownames(t(Age_cpm_log_only_HS_filtered))
+# Print UMAP
+print(umap_result6)
+
+#umap_df <- cbind(umap_df,disease_state)
+# Create a 3D scatter plot using Plotly
+fig4U <- plot_ly(umap_df6, 
+                 x = ~umap_1, y = ~umap_2, z = ~umap_3,
+                 color = umap_df6$Age,
+                 colors = c("blue","red","green","orange", "grey"),   
+                 mode = 'markers',
+                 size=10) %>% layout(title = 'Pediatric-adults stratification HS, metric euclidian, neighbors = square')
+
+# Display the 3D scatter plot
+fig4U
+
+#### UMAP DEGs pediatric-adult except HS  #### 
+
+Totalage_whHS_unique <- DEGs_age[DEGs_age$class != '=',]
+Totalage_whHS_unique <- Totalage_whHS_unique[Totalage_whHS_unique %nin% Human_genes$`Ensembl ID`,]
+
+Age_cpm_log_wh_HS <- cpm_table_age_log[which(rownames(cpm_table_age_log) %in% rownames(Totalage_whHS_unique)),]
+Age_cpm_log_wh_HS_filtered <- Age_cpm_log_wh_HS[,which(apply(Age_cpm_log_wh_HS, 2, var) != 0)]
+Age_cpm_log_wh_HS_filtered <- Age_cpm_log_wh_HS_filtered[which(apply(Age_cpm_log_wh_HS_filtered, 1, var) != 0),]
+
+
+
+# Perform UMAP dimensionality reduction
+umap_result7 <- umap(t(Age_cpm_log_wh_HS_filtered),
+                     n_neighbors = 5,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+
+
+umap_result7 <- umap(t(Age_cpm_log_wh_HS_filtered),
+                     n_neighbors = 15,         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+umap_result7 <- umap(t(Age_cpm_log_wh_HS_filtered),
+                     n_neighbors = sqrt(dim(t(Age_cpm_log_wh_HS_filtered))[1]),         #or the square root of the rows 
+                     min_dist = 0.1,          #
+                     metric = "euclidean",    #you can change it
+                     n_components = 3
+)
+
+# clusterino_umap_age <- clusterino_pam2$type
+umap_df7 <- data.frame(umap_result7$layout,
+                       Cell_type = clusterino_umap_age)
+
+colnames(umap_df7) <- c("umap_1","umap_2","umap_3", "Age")
+rownames(umap_df7) <-  rownames(t(Age_cpm_log_wh_HS_filtered))
+# Print UMAP
+print(umap_result7)
+
+#umap_df <- cbind(umap_df,disease_state)
+# Create a 2D scatter plot using Plotly
+fig5U <- plot_ly(umap_df7, 
+                 x = ~umap_1, y = ~umap_2, z = ~umap_3,
+                 color = umap_df7$Age,
+                 colors = c("orange","grey"),   
+                 mode = 'markers',
+                 size=10) %>%  layout(title = 'Pediatric-adults stratification without HS, metric euclidian, neighbors = square')
+
+# Display the 2D scatter plot
+fig5U
+
+
+
+
+
 
 
 
