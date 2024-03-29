@@ -151,7 +151,7 @@ dev.off()
 
 # -> noramlizzazione non un granche', come mai? Forse perche' adesso sono tanti? 
 
-###### Differential gene expression analysis ####
+##### Differential gene expression analysis ####
 
 total_adjusted <- merge(control_adjusted,tumor_adjusted,by='ensembl_gene_id')
 total_adjusted1 <- total_adjusted %>% column_to_rownames('ensembl_gene_id')
@@ -199,7 +199,7 @@ filter_counts_df <- total_adjusted1[filter_vec>=cond_tresh,]
 # edge_c_total <- DGEList(counts = total_adjusted1, group=info_samples$condition, samples=info_samples, genes=total_adjusted1)
 # edge_n_total <- calcNormFactors(edge_c_total,method = 'TMM')
 
-####### 
+
 edge_c_total <- DGEList(counts = filter_counts_df, group=info_samples$condition, samples=info_samples, genes=filter_counts_df)
 edge_n_total <- calcNormFactors(edge_c_total,method = 'TMM')
 # We create the cpm table
@@ -443,7 +443,7 @@ fig
 fig2<-plot_ly(components, x=~PC1, y=~PC2, z=~PC3,color=components$`(pam2$clustering)`,colors=brewer.pal(n = 8, name = "RdBu") ,mode='markers',marker = list(size = 4)) #  %>%
 fig2
 
-#######
+
 clusterino_pam2_nonHS<-as.data.frame((pam2_nonHS$clustering))
 components_nonHS<-data.PC_nonHG_tumor$x
 # components<-data.frame(components)
@@ -462,21 +462,6 @@ fig2_nonHS<-plot_ly(components_nonHS, x=~PC1, y=~PC2, z=~PC3, color =components_
 fig2_nonHS
 # layout(legend = list(title = list(text = 'color')))
 
-
-# ## Setting controls 
-# info_samples_new_cond$condition<-"AT" 
-# #GSE84445 -> first 20 AH 
-# info_samples_new_cond$condition[1:20]<-"AH"
-# #GSE227832 -> 10 PH
-# info_samples_new_cond$condition[21:30]<-"PH"
-# #GSE139073 -> 40 AH 
-# info_samples_new_cond$condition[31:70] <- 'AH'
-# #GSE115736 -> 18 unkonw +UK
-# 
-# 
-# info_samples_new_cond$condition[31:562] <- 'PT'
-# info_samples_new_cond$condition[info_samples_new_cond$sample %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <-"PT"
-
 # GSE181157, 173 pediatric tumor samples
 # GSE227832, 321 tumor samples, all pediatric from the metadata
 # GSE133499, 38 tumor samples pediatric
@@ -486,13 +471,27 @@ fig2_nonHS
 # SO, we have: 619 sample pediatrici
 # and 85 sample adult (only T!)
 
+
+### Setting pediatric and adults 
 clusterino_pam2$type <- 'pediatric'
-clusterino_pam2$type[533:640] <- 'adult' # position of the dataset T_all
-#ADJUSTED FOR DIFFERENT AGE CLASSIFICATION BETWEEN THE STUDIES 
-# we add the pediatric of the T_all dataset
-clusterino_pam2$type[rownames(clusterino_pam2) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
+metadataGSE181157<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
+metadataGSE181157$`DFCI ID`<- rownames(clusterino_pam2)[1:173]# HERE I KEEP PRE-B AND PRE-T TYPES!
+for (row in 1:dim(metadata)[1]){
+  Age <- metadataGSE181157$`Age at Dx (years)`[row]  
+  if (Age<=18){
+    clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'pediatric'  } else{
+      clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'adult'  }
+}
+metadata_choort_7_8 <- readxl::read_xlsx('../Tumors/Metadata_choort_7_8.xlsx', skip=1)
 
-
+for (row in 1:dim(metadata_choort_7_8)[1]){  Age <- metadata_choort_7_8$`Age (year)`[row]
+            if (Age=='Not available'){    
+              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'Unknown'} 
+            else if (as.numeric(Age)<=18){    
+              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'pediatric'} 
+            else {
+              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'adult'
+}}
 
 components2 <- as.data.frame(data.PC.tumor$x)
 components2<-cbind(components2, clusterino_pam2)
@@ -503,10 +502,6 @@ fig3
 fig4<-plot_ly(components2, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$type,colors=c('darkred', 'blue4') ,mode='markers')
 fig4
 
-clusterino_pam2_nonHS$type <- 'pediatric'
-clusterino_pam2_nonHS$type[533:640] <- 'adult'
-#ADJUSTED FOR DIFFERENT AGE CLASSIFICATION BETWEEN THE STUDIES 
-clusterino_pam2_nonHS$type[rownames(clusterino_pam2_nonHS) %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <- 'pediatric'
 components2_nonHS <- as.data.frame(data.PC_nonHG_tumor$x)
 components2_nonHS<-cbind(components2_nonHS, clusterino_pam2_nonHS)
 components2_nonHS$PC2 <- -components2_nonHS$PC2
@@ -536,7 +531,7 @@ fig4_nonHS
 # fig6<-plot_ly(componet3, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$risk,colors=c('darkred', 'blue4') ,mode='markers')
 # fig6
 # 
-# #####
+
 # setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
 # 
 # 
@@ -656,7 +651,6 @@ fig8
 
 
 # 
-# # ############ 
 # 
 # #HS
 # clusterino_pam1<-as.data.frame((pam1$clustering))
@@ -740,7 +734,6 @@ fig8
 
 
 
-##############
 
 ####### Categories of HS genes found UP and Down between Tumor and Control
 ## Above we defined Diff_expressed <- DEGs[which(DEGs$class != '='),]
@@ -758,8 +751,7 @@ lbs<-paste(lbs,"%",sep=" ")
 pie(slices, lbs,col=brewer.pal(n = 9, name = "Set1"))
 legend(x="topright", inset=.02,y.intersp = 1,title="Mechanism of origin", legend=c("de novo origin","amplification","loss","sequence alteration","structure alteration","human specific","lost in chimpanzee","new non-coding gene","regulatory region alteration"), fill=brewer.pal(n = 9, name = "Set1"), cex=0.7)
 
-##########
-
+#### GSEA ####
 library(clusterProfiler)
 library(biomaRt)
 library(org.Hs.eg.db)
@@ -1288,6 +1280,8 @@ DEGs_age <- DEGs_age[order(DEGs_age$logFC, decreasing = T),] # we order based on
 
 table(DEGs_age$class)
 # +:59 -: 100  =: 3606
+# after adjustment of age, so over 18 adults under and also 18 pediatric  - 94   + 69   = 3754 -> more DEGS?!
+     
      
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in pediatric cancer
 DEGs_age_HS <- DEGs_age %>% dplyr::filter(rownames(DEGs_age) %in% Human_genes$`Ensembl ID`)
@@ -1296,6 +1290,8 @@ Down_HS_age<- DEGs_age[DEGs_age$class=='-',] %>% dplyr::filter(rownames(DEGs_age
 
 table(DEGs_age_HS$class)
 #  We have 8 down-reg HS genes and 6 up-regulated HS genes
+# after change  - 9   + 6  = 115
+     
 
 
 #### UMAP DEGs pediatric-adult only HS  #### 
@@ -1346,7 +1342,7 @@ print(umap_result6)
 fig4U <- plot_ly(umap_df6, 
                  x = ~umap_1, y = ~umap_2, z = ~umap_3,
                  color = umap_df6$Age,
-                 colors = c("blue","red","green","orange", "grey"),   
+                 colors = c("#003f5c","#bc5090","#ffa600"),   
                  mode = 'markers',
                  size=10) %>% layout(title = 'Pediatric-adults stratification HS, metric euclidian, neighbors = square')
 
@@ -1402,7 +1398,7 @@ print(umap_result7)
 fig5U <- plot_ly(umap_df7, 
                  x = ~umap_1, y = ~umap_2, z = ~umap_3,
                  color = umap_df7$Age,
-                 colors = c("orange","grey"),   
+                 colors =c("#003f5c","#bc5090","#ffa600"),   
                  mode = 'markers',
                  size=10) %>%  layout(title = 'Pediatric-adults stratification without HS, metric euclidian, neighbors = square')
 
