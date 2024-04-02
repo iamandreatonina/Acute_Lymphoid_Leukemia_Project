@@ -1,4 +1,4 @@
-setwd("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/data/Datasets/Post_manipulation")
+setwd("..../Datasets/Post_manipulation")
 library(gprofiler2)
 library(tidyverse)
 
@@ -42,7 +42,7 @@ unique(gene_symbols$external_gene_name) == HS_DEG_gene_names$name
 #rm(All_DEG,DEG_without_Human_specific,Human_specific_in_DEG)
 
 #### 3. Use gost to to over-representation analysis (ORA) ####
-setwd("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/Images/ORA_and_GSEA")
+setwd("..../Images/ORA_and_GSEA")
 #Over-Representation Analysis (ORA):
 #ORA determines whether genes within a predefined gene set are over-represented or enriched within a list of differentially expressed or 
 #selected genes compared to what would be expected by chance.
