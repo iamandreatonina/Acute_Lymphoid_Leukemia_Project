@@ -5,6 +5,7 @@ library(dplyr)
 library(readxl)
 library(ggplot2)
 library(stringr)
+library(magrittr)
 
 `%nin%` <- Negate(`%in%`)
 
@@ -187,7 +188,6 @@ info_samples$replicate<-c(rep(1,793))
 # info_samples_new_cond$condition[info_samples_new_cond$sample %in% c('CMUTALLS4','T59','T91','T89','T87','T82','T81','T74','T59','T112','T102','SIHTALLS32','SIHTALLS25','SIHTALLS12','H301TALLS3','H301TALLS13','H301TALLS11','CMUTALLS9','CMUTALLS13','T67','T77','T103')] <-"PT"
 
 # let's filter the dataset and setting the threshold definition
-
 median_thr<-5
 cond_tresh<-0.5
 # filter_vec<-apply(total_adjusted1, 1, function(y) max(by(y,info_samples_new_cond$condition, function(x) median(x>=median_thr))) )
@@ -300,8 +300,9 @@ heatmap(as.matrix(cpm_table[which(rownames(cpm_table) %in% rownames(DEGs_selecte
 dev.off()
 
 #for improving the clusterization we set the cpm table as logarithmic
+
 cpm_table_log <- as.data.frame(round(log10(cpm(edge_n_total)+1),2))
-write.csv(cpm_table_log,file ='Acute_lymphoide_leukemia_cpm_log_expression_table.csv',row.names = T )
+# write.csv(cpm_table_log,file ='Acute_lymphoide_leukemia_cpm_log_expression_table.csv',row.names = T )
 
 # moment1 <- read.csv('Acute_lymphoide_leukemia_cpm_log_expression_table.csv')
 # 
@@ -373,8 +374,7 @@ plot(data.PC_nonHG_tumor$x[,1:2],pch = 19)
 library(factoextra)
 library(cluster)
 
-# Non si ripetono a due a due? C'e' qualcosa che non torna !!!
-
+#### I SEGUENTI SERVONO?####
 
 # for control-tumor -> 2 clusters as seen from graphs under
 fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10)
@@ -396,6 +396,9 @@ fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15)
 fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15,method = 'gap_stat')+ theme_classic()
 fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
 
+
+
+##### Questi servono mi sa #######
 # PAM on control-tumor
 pam1<-eclust(data.PC$x, "pam", k=9)
 pam1_nonHS <- eclust(data.PC_nonHG$x,'pam',k=9)
@@ -751,18 +754,18 @@ lbs<-paste(lbs,"%",sep=" ")
 pie(slices, lbs,col=brewer.pal(n = 9, name = "Set1"))
 legend(x="topright", inset=.02,y.intersp = 1,title="Mechanism of origin", legend=c("de novo origin","amplification","loss","sequence alteration","structure alteration","human specific","lost in chimpanzee","new non-coding gene","regulatory region alteration"), fill=brewer.pal(n = 9, name = "Set1"), cex=0.7)
 
-#### GSEA ####
+#### GSEA Tumor-Control DEGS ####
 library(clusterProfiler)
 library(biomaRt)
 library(org.Hs.eg.db)
-
+library(tibble)
 
 ensmebl <- useMart(biomart = 'ensembl',dataset = 'hsapiens_gene_ensembl')
 
-############ non HS
+############ GSEA non HS ####
 convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = rownames(DEGs), mart = ensmebl)
 
-DEGs_2 <- rownames_to_column(DEGs, var = 'ensembl_gene_id')
+DEGs_2 <- tibble::rownames_to_column(DEGs, var = 'ensembl_gene_id')
 
 DEGs_merge_convert <- merge(DEGs_2, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
 
@@ -773,7 +776,7 @@ DEGs_merge_convert<-DEGs_merge_convert[-which(duplicated(DEGs_merge_convert$entr
 Up_DEGs_merge_convert <- DEGs_merge_convert %>% dplyr::filter(DEGs_merge_convert$class == '+')
 
 Down_DEGs_merge_convert <- DEGs_merge_convert %>% dplyr::filter(DEGs_merge_convert$class == '-')
-# UP
+#### Gene Ontology enrichment analysis (biological process) UP####
 ego_BP_UP <- enrichGO(gene = Up_DEGs_merge_convert$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 0.05, qvalueCutoff = 0.05)
 
 barplot(ego_BP_UP, showCategory = 15)
@@ -781,12 +784,28 @@ barplot(ego_BP_UP, showCategory = 15)
 dotplot(ego_BP_UP, showCategory=15)
 
 heatplot(ego_BP_UP, showCategory = 2)
+#### We perform KEGG enrichment analysis. UP####
+#We use function enrichWP to retrieve the list of genes from the wiki pathways, we can see which pathways are more expressed.
 
 eWP_BP_UP <- enrichWP(gene =Up_DEGs_merge_convert$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.05, qvalueCutoff = 0.1 )
 
 head(eWP_BP_UP,10)
 
-#Down
+# Resutls 
+# WP2446 WP2446                                  Retinoblastoma gene in cancer   40/1038 89/8421 1.7e-14  1.1e-11 9.9e-12
+# WP5218 WP5218 Extrafollicular and follicular B cell activation by SARS CoV 2   32/1038 76/8421 6.2e-11  2.0e-08 1.8e-08
+# WP2849 WP2849                        Hematopoietic stem cell differentiation   27/1038 58/8421 1.2e-10  2.5e-08 2.3e-08
+# WP3937 WP3937                        Microglia pathogen phagocytosis pathway   21/1038 40/8421 8.6e-10  1.4e-07 1.2e-07
+# WP45     WP45                                     G1 to S cell cycle control   26/1038 64/8421 9.7e-09  1.2e-06 1.1e-06
+# WP3945 WP3945                             TYROBP causal network in microglia   25/1038 62/8421 2.2e-08  2.4e-06 2.2e-06
+# WP466   WP466                                                DNA replication   19/1038 42/8421 1.2e-07  1.1e-05 1.0e-05
+# WP23     WP23                              B cell receptor signaling pathway   30/1038 92/8421 2.6e-07  2.1e-05 1.9e-05
+# WP4016 WP4016                    DNA IR damage and cellular response via ATR   27/1038 81/8421 6.3e-07  4.4e-05 4.0e-05
+# WP4884 WP4884      Pathogenesis of SARS CoV 2 mediated by nsp9 nsp10 complex   12/1038 21/8421 1.2e-06  7.4e-05 6.7e-05
+
+
+
+#### Gene Ontology enrichment analysis (biological process) Down ####
 ego_BP_DW <- enrichGO(gene = Down_DEGs_merge_convert$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 0.05, qvalueCutoff = 0.05)
 
 barplot(ego_BP_DW, showCategory = 15)
@@ -795,10 +814,26 @@ dotplot(ego_BP_DW, showCategory=15)
 
 heatplot(ego_BP_DW, showCategory = 2)
 
+#### We perform KEGG enrichment analysis. Down ####
+
 eWP_BP_DW <- enrichWP(gene =Down_DEGs_merge_convert$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.05, qvalueCutoff = 0.1 )
 
-head(eWP_BP_DW@result[["Description"]],10)
-################# HS
+# head(eWP_BP_DW@result[["Description"]],10)
+head(eWP_BP_DW,10)
+
+# Result
+# WP306   WP306                                              Focal adhesion    35/405 199/8421 1.5e-11  7.5e-09 6.7e-09
+# WP2911 WP2911                 miRNA targets in ECM and membrane receptors    12/405  38/8421 1.1e-07  2.9e-05 2.5e-05
+# WP5055 WP5055                                          Burn wound healing    16/405  75/8421 3.8e-07  6.5e-05 5.7e-05
+# WP2572 WP2572            Primary focal segmental glomerulosclerosis FSGS     14/405  72/8421 6.6e-06  8.3e-04 7.4e-04
+# WP5284 WP5284 Cell interactions of the pancreatic cancer microenvironment     8/405  26/8421 1.9e-05  2.0e-03 1.7e-03
+# WP3888 WP3888                                      VEGFA VEGFR2 signaling    40/405 433/8421 4.7e-05  4.0e-03 3.5e-03
+# WP5348 WP5348                     11p11 2 copy number variation syndrome     11/405  56/8421 5.8e-05  4.2e-03 3.8e-03
+# WP3874 WP3874                 Canonical and non canonical TGF B signaling     6/405  17/8421 9.4e-05  6.0e-03 5.3e-03
+# WP185   WP185                             Integrin mediated cell adhesion    14/405 102/8421 3.5e-04  2.0e-02 1.7e-02
+# WP453   WP453                               Inflammatory response pathway     7/405  30/8421 4.4e-04  2.2e-02 2.0e-02
+
+##### GSEA Tumor-Control HS ####
 
 convert_HS <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = rownames(DEGs_Hsgenes), mart = ensmebl)
 
@@ -813,7 +848,9 @@ DEGs_merge_convert_HS<-DEGs_merge_convert_HS[-which(duplicated(DEGs_merge_conver
 Up_DEGs_merge_convert_HS<- DEGs_merge_convert_HS %>% dplyr::filter(DEGs_merge_convert_HS$class == '+')
 
 Down_DEGs_merge_convert_HS <- DEGs_merge_convert_HS %>% dplyr::filter(DEGs_merge_convert_HS$class == '-')
-# UP
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ####
+
 ego_BP_UP_HS <- enrichGO(gene = Up_DEGs_merge_convert_HS$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 0.2, qvalueCutoff =0.2)
 
 barplot(ego_BP_UP_HS)
@@ -822,16 +859,20 @@ dotplot(ego_BP_UP_HS, showCategory=15)
 
 heatplot(ego_BP_UP_HS, showCategory = 2)
 
-
-
+#### We perform KEGG enrichment analysis. HS UP ####
 
 # pathway annotation will be done after the gene expansion, due to lack of informations, to low numbers of terms
-# eWP_BP_UP_HS <- enrichWP(gene =Up_DEGs_merge_convert_HS$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 0.2)
-# 
-# head(eWP_BP_UP_HS,10)
+eWP_BP_UP_HS <- enrichWP(gene =Up_DEGs_merge_convert_HS$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 0.2)
+
+head(eWP_BP_UP_HS,10)
+
+#Result
+# WP2431 WP2431                                        Spinal cord injury      5/34 120/8421 0.00011     0.01 0.0099 
+# WP5092 WP5092 Interactions of natural killer cells in pancreatic cancer      3/34  28/8421 0.00018     0.01 0.0099
 
 
-#Down
+##### Gene Ontology enrichment analysis (biological process) HS Down ####
+
 ego_BP_DW_HS <- enrichGO(gene = Down_DEGs_merge_convert_HS$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 0.2, qvalueCutoff = 0.2)
 
 barplot(ego_BP_DW_HS)
@@ -902,8 +943,6 @@ DEGs_subtype_PreB$class[which(DEGs_subtype_PreB$logCPM > 1 & DEGs_subtype_PreB$l
 DEGs_subtype_PreB <- DEGs_subtype_PreB[order(DEGs_subtype_PreB$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_PreB$class)
-# +: 462  -:432     =: 7894 
-
 # with new samples -327    +276    =8394 
    
 
@@ -947,8 +986,6 @@ DEGs_subtype_PT$class[which(DEGs_subtype_PT$logCPM > 1 & DEGs_subtype_PT$logFC <
 DEGs_subtype_PT <- DEGs_subtype_PT[order(DEGs_subtype_PT$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_PT$class)
-# +: 482  -:848   =: 6773
-
 # with new samples  - 868    + 371   = 6809
     
 
@@ -992,8 +1029,6 @@ DEGs_subtype_T$class[which(DEGs_subtype_T$logCPM > 1 & DEGs_subtype_T$logFC < (-
 DEGs_subtype_T <- DEGs_subtype_T[order(DEGs_subtype_T$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_T$class)
-# +: 381  -:16   =: 3848 
-
 # with new samples    - 16   + 285   = 3417
     
 
@@ -1003,7 +1038,6 @@ Up_HS_T <- DEGs_subtype_T[DEGs_subtype_T$class=='+',] %>% dplyr::filter(rownames
 Down_HS_T<- DEGs_subtype_T[DEGs_subtype_T$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_T_HS$class)
-#  We have 0 down-reg HS genes and 33 up-regulated HS genes
 # with new samples +34   = 111
  
 
@@ -1151,7 +1185,6 @@ fig2U <- plot_ly(umap_df4,
 fig2U
 
 
-
 #### UMAP without HS genes ####
 
 DEGs_subtype_B_without_HS<-DEGs_subtype_B[DEGs_subtype_B$class != '=',]
@@ -1227,6 +1260,11 @@ fig3U
 
 #write.csv(DEGs_subtype_B,file = 'DEGs_subtype_B.csv',row.names = T, col.names = T)
 
+#### GSEA subtypes non HS ####
+
+
+
+
 
 ############ DEG adults vs pediatric of coruse just tumor ###### 
 
@@ -1243,8 +1281,6 @@ cpm_table_age <-as.data.frame(round(cpm(edge_n_age),2)) # the library size is sc
 design_age<- model.matrix(~0+group, data = edge_n_age$samples)
 colnames(design_age) <- levels(edge_n_age$samples$group)
 rownames(design_age) <- edge_n_age$samples$sample
-
-
 
 # Calculate dispersion and fit the result with edgeR (necessary for differential expression analysis)
 edge_d_age <- estimateDisp(edge_n_age,design_age)
@@ -1279,9 +1315,7 @@ DEGs_age$class[which(DEGs_age$logCPM > 1 & DEGs_age$logFC < (-1.5))] = '-'
 DEGs_age <- DEGs_age[order(DEGs_age$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_age$class)
-# +:59 -: 100  =: 3606
 # after adjustment of age, so over 18 adults under and also 18 pediatric  - 94   + 69   = 3754 -> more DEGS?!
-     
      
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in pediatric cancer
 DEGs_age_HS <- DEGs_age %>% dplyr::filter(rownames(DEGs_age) %in% Human_genes$`Ensembl ID`)
@@ -1289,10 +1323,8 @@ Up_HS_age <- DEGs_age[DEGs_age$class=='+',] %>% dplyr::filter(rownames(DEGs_age[
 Down_HS_age<- DEGs_age[DEGs_age$class=='-',] %>% dplyr::filter(rownames(DEGs_age[DEGs_age$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_age_HS$class)
-#  We have 8 down-reg HS genes and 6 up-regulated HS genes
-# after change  - 9   + 6  = 115
+# after change  - 8   + 7  = 115
      
-
 
 #### UMAP DEGs pediatric-adult only HS  #### 
 library(umap)
@@ -1410,12 +1442,14 @@ fig5U
 
 
 
-
+##### GSEA HS Pediatric-Adult ####
 
 convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_HS_age), mart = ensmebl)
 Up_HS_age$ensembl_gene_id<-row.names(Up_HS_age)
 
 merged <- merge(Up_HS_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ####
 
 up_age_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
 
@@ -1425,13 +1459,25 @@ dotplot(up_age_hs, showCategory=15)
 
 heatplot(up_age_hs, showCategory = 5)
 
-# kegg
+#### We perform KEGG enrichment analysis. HS UP ####
 
 up_age <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
 
 head(up_age,10)
 
-# down
+#Results 
+# WP3664 WP3664 Regulation of Wnt B catenin signaling by small molecule compounds       1/2  17/8421 0.0040    0.046  0.008   8325     1
+# WP4150 WP4150                                   Wnt signaling in kidney disease       1/2  37/8421 0.0088    0.046  0.008   8325     1
+# WP3680 WP3680        Physico chemical features and toxicity associated pathways       1/2  66/8421 0.0156    0.046  0.008   8325     1
+# WP2571 WP2571                                 Polycystic kidney disease pathway       1/2  85/8421 0.0201    0.046  0.008   8325     1
+# WP4336 WP4336      ncRNAs involved in Wnt signaling in hepatocellular carcinoma       1/2  89/8421 0.0210    0.046  0.008   8325     1
+# WP4258 WP4258           lncRNA in canonical Wnt signaling and colorectal cancer       1/2  98/8421 0.0231    0.046  0.008   8325     1
+# WP399   WP399                            Wnt signaling pathway and pluripotency       1/2 102/8421 0.0241    0.046  0.008   8325     1
+# WP428   WP428                                                     Wnt signaling       1/2 114/8421 0.0269    0.046  0.008   8325     1
+# WP3931 WP3931                         Embryonic stem cell pluripotency pathways       1/2 117/8421 0.0276    0.046  0.008   8325     1
+# WP4787 WP4787                   Osteoblast differentiation and related diseases       1/2 119/8421 0.0281    0.046  0.008   8325     1
+
+#### Gene Ontology enrichment analysis (biological process) HS Down ####
 
 convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_age), mart = ensmebl)
 Down_HS_age$ensembl_gene_id<-row.names(Down_HS_age)
@@ -1446,13 +1492,18 @@ dotplot(down_age_hs, showCategory=15)
 
 heatplot(down_age_hs, showCategory = 5)
 
-# kegg
+#### We perform KEGG enrichment analysis. HS Down ####
 
 down_age_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
 
 head(down_age_wp, 10)
 
-# non hs
+# WP22     WP22                             IL 9 signaling pathway       1/2  17/8421  0.004    0.016     NA   3581     1
+# WP4917 WP4917                          Proximal tubule transport       1/2  57/8421  0.013    0.025     NA    486     1
+# WP4538 WP4538 Regulatory circuits of the STAT3 signaling pathway       1/2  78/8421  0.018    0.025     NA   3581     1
+# WP536   WP536                Calcium regulation in cardiac cells       1/2 152/8421  0.036    0.036     NA    486     1
+
+##### GSEA HS Pediatric-Adult non HS ####
 
 Up_age <- DEGs_age[DEGs_age$class=='+',]
 Down_age<- DEGs_age[DEGs_age$class=='-',]
@@ -1462,6 +1513,8 @@ Up_age$ensembl_gene_id<-row.names(Up_age)
 
 merged <- merge(Up_age, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
 
+#### Gene Ontology enrichment analysis (biological process) UP ####
+
 Up_age_BP <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
 
 barplot(Up_age_BP, showCategory = 15)
@@ -1470,13 +1523,14 @@ dotplot(Up_age_BP, showCategory=15)
 
 heatplot(Up_age_BP, showCategory = 5)
 
-# kegg
+#### We perform KEGG enrichment analysis. UP ####
 
 up_age <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 0.1 )
 
 head(up_age,10)
+#Why? empty
 
-# down
+#### Gene Ontology enrichment analysis (biological process) Down ####
 
 convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_age), mart = ensmebl)
 Down_age$ensembl_gene_id<-row.names(Down_age)
@@ -1491,13 +1545,22 @@ dotplot(down_age_BP, showCategory=15)
 
 heatplot(down_age_BP, showCategory = 5)
 
-# kegg
+#### We perform KEGG enrichment analysis. Down ####
 
 down_age_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
 
 head(down_age_wp, 10)
 
-############
+#RESULTS:
+# WP2877 WP2877 Vitamin D receptor pathway      5/35 187/8421 0.00097    0.068  0.060 1565/7078/9173/6280/820     5
+# WP1533 WP1533     Vitamin B12 metabolism      3/35  51/8421 0.00119    0.068  0.060          3039/3043/6352     3
+# WP236   WP236               Adipogenesis      4/35 131/8421 0.00202    0.076  0.067    56729/5618/2624/2662     4
+
+
+
+
+
+############ Validation ####
 
 # VALIDATION OF ONEGENE - STRING
 # install.packages('rbioapi')
