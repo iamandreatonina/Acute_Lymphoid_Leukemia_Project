@@ -6,6 +6,22 @@ library(readxl)
 library(ggplot2)
 library(stringr)
 library(magrittr)
+library(umap)
+library(edgeR)
+#BiocManager::install("DESeq2")
+library(DESeq2)
+#install.packages('factoextra')
+#install.packages('cluster')
+library(factoextra)
+library(cluster)
+library(RColorBrewer)
+library(clusterProfiler)
+library(biomaRt)
+library(org.Hs.eg.db)
+library(tibble)
+library(plotly)
+
+
 
 `%nin%` <- Negate(`%in%`)
 
@@ -70,10 +86,6 @@ tumor_adjusted <- add_column(tumor_adjusted, 'ensembl_gene_id' = Tumor$ensembl_g
 ##### Normalization with edgeR package ####
 
 # We use TMM method , which is a normalization method intra and inter-sample and we create CPM matrices 
-library(edgeR)
-#BiocManager::install("DESeq2")
-library(DESeq2)
-
 
 # Let`s check how many human specific genes we have in our dataset
 HSgenes_tumor <- tumor_adjusted %>% dplyr::filter(tumor_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`) 
@@ -315,7 +327,6 @@ heatmap(as.matrix(cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs
 dev.off()
 
 ############ heatmap human specific ####
-library(plotly)
 
 col <- rep('chartreuse4', 670)
 col[which(info_samples$condition == 'T')] <- 'burlywood3' 
@@ -369,10 +380,6 @@ plot(data.PC_nonHG_tumor$x[,1:2],pch = 19)
 
 
 ##### Partitioning around medoids, need to also to install cmake ####
-#install.packages('factoextra')
-#install.packages('cluster')
-library(factoextra)
-library(cluster)
 
 #### I SEGUENTI SERVONO?####
 
@@ -428,7 +435,6 @@ clust.vec<-cutree(hc2,k=8)
 fviz_cluster(list(data=data.PC.tumor$x, cluster=clust.vec))
 
 # clusters <- mutate(cpm_table_log[31:670],cluster =clust.vec
-library(RColorBrewer)
 
 clusterino_pam2<-as.data.frame((pam2$clustering))
 components<-data.PC.tumor[["x"]]
@@ -708,36 +714,6 @@ fig8
 # fig9_nonHS
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ####### Categories of HS genes found UP and Down between Tumor and Control
 ## Above we defined Diff_expressed <- DEGs[which(DEGs$class != '='),]
 
@@ -755,10 +731,6 @@ pie(slices, lbs,col=brewer.pal(n = 9, name = "Set1"))
 legend(x="topright", inset=.02,y.intersp = 1,title="Mechanism of origin", legend=c("de novo origin","amplification","loss","sequence alteration","structure alteration","human specific","lost in chimpanzee","new non-coding gene","regulatory region alteration"), fill=brewer.pal(n = 9, name = "Set1"), cex=0.7)
 
 #### GSEA Tumor-Control DEGS ####
-library(clusterProfiler)
-library(biomaRt)
-library(org.Hs.eg.db)
-library(tibble)
 
 ensmebl <- useMart(biomart = 'ensembl',dataset = 'hsapiens_gene_ensembl')
 
@@ -1130,7 +1102,6 @@ Total_HS_unqiue <- c(rownames(Up_HS_B_unique),rownames(Down_HS_B_unique),rowname
 
 
 #### UMAP DEGs tumors only HS  #### 
-library(umap)
 
 cpm_table_subtypes_log <- as.data.frame(round(log10(cpm(edge_n_subtypes)+1),2))
 Subtype_cpm_log_only_HS <- cpm_table_subtypes_log[which(rownames(cpm_table_subtypes_log) %in% Total_HS_unqiue),]
@@ -1184,22 +1155,97 @@ fig2U <- plot_ly(umap_df4,
 # Display the 2D scatter plot
 fig2U
 
+#### COMPARISON BETWEEN THE DEGS not only HS IN THE 4 SUBTYPES ####
 
-#### UMAP without HS genes ####
+## subtype B 
 
-DEGs_subtype_B_without_HS<-DEGs_subtype_B[DEGs_subtype_B$class != '=',]
-DEGs_subtype_B_without_HS<-DEGs_subtype_B_without_HS[rownames(DEGs_subtype_B_without_HS) %nin% Human_genes$`Ensembl ID`,]
+Up_subtype_B_unique <- DEGs_subtype_B[DEGs_subtype_B$class == '+',] # 293 + 
+Down_subtype_B_unique <- DEGs_subtype_B[DEGs_subtype_B$class == '-',]# 51 -
 
-DEGs_subtype_T_without_HS<-DEGs_subtype_T[DEGs_subtype_T$class != '=',]
-DEGs_subtype_T_without_HS<-DEGs_subtype_T_without_HS[rownames(DEGs_subtype_T_without_HS) %nin% Human_genes$`Ensembl ID`,]
+Up_subtype_B_unique <- Up_subtype_B_unique[rownames(Up_subtype_B_unique) %nin% c(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '+',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '+',]),
+                                                                                      rownames(DEGs_subtype_T[DEGs_subtype_T$class == '+',])),]
 
-DEGs_subtype_PreT_without_HS<-DEGs_subtype_PT[DEGs_subtype_PT$class != '=',]
-DEGs_subtype_PreT_without_HS<-DEGs_subtype_PreT_without_HS[rownames(DEGs_subtype_PreT_without_HS) %nin% Human_genes$`Ensembl ID`,]
+Down_subtype_B_unique <- Down_subtype_B_unique[rownames(Down_subtype_B_unique) %nin% c(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '-',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '-',]),
+                                                                                      rownames(DEGs_subtype_T[DEGs_subtype_T$class == '-',])),]
+table(Up_subtype_B_unique$class) # 35+ 
+table(Down_subtype_B_unique$class) # 4 -
 
-DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB[DEGs_subtype_PreB$class != '=',]
-DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB_without_HS[rownames(DEGs_subtype_PreB_without_HS) %nin% Human_genes$`Ensembl ID`,]
 
-Total_without_HS_unique <- c(rownames(DEGs_subtype_PreB_without_HS),rownames(DEGs_subtype_PreT_without_HS),rownames(DEGs_subtype_T_without_HS),rownames(DEGs_subtype_B_without_HS))
+## Subtype T 
+
+Up_subtype_T_unique <- DEGs_subtype_T[DEGs_subtype_T$class == '+',] # 285 + 
+Down_subtype_T_unique <- DEGs_subtype_T[DEGs_subtype_T$class == '-',]# 16 -
+
+Up_subtype_T_unique <- Up_subtype_T_unique[rownames(Up_subtype_T_unique) %nin% c(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '+',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '+',]),
+                                                                                 rownames(DEGs_subtype_B[DEGs_subtype_B$class == '+',])),]
+
+Down_subtype_T_unique <- Down_subtype_T_unique[rownames(Down_subtype_T_unique) %nin% c(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '-',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '-',]),
+                                                                                       rownames(DEGs_subtype_B[DEGs_subtype_B$class == '-',])),]
+table(Up_subtype_T_unique$class) # 53 + 
+table(Down_subtype_T_unique$class) # 11 -
+
+## Subtype Pre B 
+
+Up_subtype_PreB_unique <- DEGs_subtype_PreB[DEGs_subtype_PreB$class == '+',] # 276 + 
+Down_subtype_PreB_unique <- DEGs_subtype_PreB[DEGs_subtype_PreB$class == '-',]# 327 -
+
+Up_subtype_PreB_unique <- Up_subtype_PreB_unique[rownames(Up_subtype_PreB_unique) %nin% c(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '+',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '+',]),
+                                                                                 rownames(DEGs_subtype_B[DEGs_subtype_B$class == '+',])),]
+
+Down_subtype_PreB_unique <- Down_subtype_PreB_unique[rownames(Down_subtype_PreB_unique) %nin% c(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '-',]),rownames(DEGs_subtype_PT[DEGs_subtype_PT$class == '-',]),
+                                                                                       rownames(DEGs_subtype_B[DEGs_subtype_B$class == '-',])),]
+table(Up_subtype_PreB_unique$class) # 127 + 
+table(Down_subtype_PreB_unique$class) # 241 -
+
+##Subtype Pre T
+
+Up_subtype_PreT_unique <- DEGs_subtype_PT[DEGs_subtype_PT$class == '+',] # 371 + 
+Down_subtype_PreT_unique <- DEGs_subtype_PT[DEGs_subtype_PT$class == '-',]# 868 -
+
+Up_subtype_PreT_unique <- Up_subtype_PreT_unique[rownames(Up_subtype_PreT_unique) %nin% c(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '+',]),rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '+',]),
+                                                                                          rownames(DEGs_subtype_B[DEGs_subtype_B$class == '+',])),]
+
+Down_subtype_PreT_unique <- Down_subtype_PreT_unique[rownames(Down_subtype_PreT_unique) %nin% c(rownames(DEGs_subtype_T[DEGs_subtype_T$class == '-',]),rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class == '-',]),
+                                                                                                rownames(DEGs_subtype_B[DEGs_subtype_B$class == '-',])),]
+table(Up_subtype_PreT_unique$class) # 293 + 
+table(Down_subtype_PreT_unique$class) # 811 -
+
+
+# Results of DEGS of the subtypes by taking in consideration all the genes without commons 
+
+# Pre B with new samples 127+ 241-
+# Pre T with new samples 811- 293+ 
+# T with new samples 53+ 11- 
+# B with new samples 35+ 4-
+
+
+#### UMAP without HS genes and commons ####
+
+Up_subtype_B_unique_withoutHS <- Up_subtype_B_unique[rownames(Up_subtype_B_unique) %nin% Human_genes$`Ensembl ID`,]
+Down_subtype_B_unique_withoutHS <- Down_subtype_B_unique[rownames(Down_subtype_B_unique) %nin% Human_genes$`Ensembl ID`,]
+
+Up_subtype_T_unique_withoutHS <-  Up_subtype_T_unique[rownames(Up_subtype_T_unique) %nin% Human_genes$`Ensembl ID`,]
+Down_subtype_T_unique_withoutHS <- Down_subtype_T_unique[rownames(Down_subtype_T_unique) %nin% Human_genes$`Ensembl ID`,]
+
+Up_subtype_PreB_unique_withoutHS <-  Up_subtype_PreB_unique[rownames(Up_subtype_PreB_unique) %nin% Human_genes$`Ensembl ID`,]
+Down_subtype_PreB_unique_withoutHS <-  Down_subtype_PreB_unique[rownames(Down_subtype_PreB_unique) %nin% Human_genes$`Ensembl ID`,]
+
+Up_subtype_PreT_unique_withoutHS <- Up_subtype_PreT_unique[rownames(Up_subtype_PreT_unique) %nin% Human_genes$`Ensembl ID`,]
+Down_subtype_PreT_unique_withoutHS <- Down_subtype_PreT_unique[rownames(Down_subtype_PreT_unique) %nin% Human_genes$`Ensembl ID`,]
+# DEGs_subtype_B_without_HS<-DEGs_subtype_B[DEGs_subtype_B$class != '=',]
+# DEGs_subtype_B_without_HS<-DEGs_subtype_B_without_HS[rownames(DEGs_subtype_B_without_HS) %nin% Human_genes$`Ensembl ID`,]
+# 
+# DEGs_subtype_T_without_HS<-DEGs_subtype_T[DEGs_subtype_T$class != '=',]
+# DEGs_subtype_T_without_HS<-DEGs_subtype_T_without_HS[rownames(DEGs_subtype_T_without_HS) %nin% Human_genes$`Ensembl ID`,]
+# 
+# DEGs_subtype_PreT_without_HS<-DEGs_subtype_PT[DEGs_subtype_PT$class != '=',]
+# DEGs_subtype_PreT_without_HS<-DEGs_subtype_PreT_without_HS[rownames(DEGs_subtype_PreT_without_HS) %nin% Human_genes$`Ensembl ID`,]
+# 
+# DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB[DEGs_subtype_PreB$class != '=',]
+# DEGs_subtype_PreB_without_HS<-DEGs_subtype_PreB_without_HS[rownames(DEGs_subtype_PreB_without_HS) %nin% Human_genes$`Ensembl ID`,]
+
+Total_without_HS_unique <- c(rownames(Up_subtype_B_unique_withoutHS),rownames(Down_subtype_B_unique_withoutHS),rownames(Up_subtype_T_unique_withoutHS),rownames(Down_subtype_T_unique_withoutHS), 
+                             rownames(Up_subtype_PreB_unique_withoutHS),rownames(Down_subtype_PreB_unique_withoutHS),rownames(Up_subtype_PreT_unique_withoutHS),rownames(Down_subtype_PreT_unique_withoutHS))
 
 
 Subtype_cpm_log_without_HS <- cpm_table_subtypes_log[which(rownames(cpm_table_subtypes_log) %in% Total_without_HS_unique),]
@@ -1248,7 +1294,7 @@ fig3U <- plot_ly(umap_df5,
                  color = umap_df4$Cell_type,
                  colors = c("blue","red","green","orange", "grey"),   
                  mode = 'markers',
-                 size=10)  %>% layout(title = 'Tumor subtypes without HS, metric euclidian, neighbors = square')
+                 size=10) %>%  layout(title = 'Tumor subtypes without HS and commons, metric euclidian, neighbors = square')
 
 # Display the 2D scatter plot
 fig3U
@@ -1260,13 +1306,226 @@ fig3U
 
 #write.csv(DEGs_subtype_B,file = 'DEGs_subtype_B.csv',row.names = T, col.names = T)
 
-#### GSEA subtypes non HS ####
+
+#### GSEA subtypes HS ####
+
+### Subtype pre-B ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_HS_PreB_unique), mart = ensmebl)
+Up_HS_PreB_unique$ensembl_gene_id<-row.names(Up_HS_PreB_unique)
+
+merged <- merge(Up_HS_PreB_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_PreB_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_PreB_hs, showCategory = 15)
+
+dotplot(up_PreB_hs, showCategory=15)
+
+heatplot(up_PreB_hs, showCategory = 5)
+
+###We perform KEGG enrichment analysis. HS UP ###
+
+up_PreB_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_PreB_hs_kegg,10)
+
+#Results 
+# WP2431 WP2431                            Spinal cord injury       1/1 120/8421  0.014    0.016     NA   1464     1
+# WP5417 WP5417 Cell lineage map for neuronal differentiation       1/1 132/8421  0.016    0.016     NA   1464     1
+
+###Gene Ontology enrichment analysis (biological process) HS Down ###
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_PreB_unique), mart = ensmebl)
+Down_HS_PreB_unique$ensembl_gene_id<-row.names(Down_HS_PreB_unique)
+
+merged <- merge(Down_HS_PreB_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+down_PreB_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_PreB_hs, showCategory = 15)
+
+dotplot(down_PreB_hs, showCategory=15)
+
+heatplot(down_PreB_hs, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS Down ###
+
+down_PreB_hs_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(down_PreB_hs_wp, 10)
+
+# WP1425 WP1425         Bone morphogenic protein signaling and regulation       1/3 12/8421 0.0043    0.048  0.011    657     1
+# WP3874 WP3874               Canonical and non canonical TGF B signaling       1/3 17/8421 0.0060    0.048  0.011    657     1
+# WP1591 WP1591                                         Heart development       1/3 47/8421 0.0167    0.048  0.011    657     1
+# WP4917 WP4917                                 Proximal tubule transport       1/3 57/8421 0.0202    0.048  0.011    486     1
+# WP5053 WP5053                 Development of ureteric collection system       1/3 60/8421 0.0212    0.048  0.011    657     1
+# WP5352 WP5352             10q11 21q11 23 copy number variation syndrome       1/3 61/8421 0.0216    0.048  0.011    657     1
+# WP474   WP474                                 Endochondral ossification       1/3 63/8421 0.0223    0.048  0.011    657     1
+# WP4808 WP4808        Endochondral ossification with skeletal dysplasias       1/3 63/8421 0.0223    0.048  0.011    657     1
+# WP5402 WP5402                            10q22q23 copy number variation       1/3 64/8421 0.0226    0.048  0.011    657     1
+# WP2840 WP2840 Hair follicle development cytodifferentiation part 3 of 3       1/3 87/8421 0.0307    0.054  0.012    657     1
+
+
+### Subtype pre-T ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_HS_PreT_unique), mart = ensmebl)
+Up_HS_PreT_unique$ensembl_gene_id<-row.names(Up_HS_PreT_unique)
+
+merged <- merge(Up_HS_PreT_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_PreT_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_PreT_hs, showCategory = 15)
+
+dotplot(up_PreT_hs, showCategory=15)
+
+heatplot(up_PreT_hs, showCategory = 5)
+
+#### We perform KEGG enrichment analysis. HS UP ####
+
+up_PreT_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_PreT_hs_kegg,10)
+
+#Results 
+# WP1425 WP1425         Bone morphogenic protein signaling and regulation       1/1 12/8421 0.0014    0.015     NA    657     1
+# WP3874 WP3874               Canonical and non canonical TGF B signaling       1/1 17/8421 0.0020    0.015     NA    657     1
+# WP1591 WP1591                                         Heart development       1/1 47/8421 0.0056    0.015     NA    657     1
+# WP5053 WP5053                 Development of ureteric collection system       1/1 60/8421 0.0071    0.015     NA    657     1
+# WP5352 WP5352             10q11 21q11 23 copy number variation syndrome       1/1 61/8421 0.0072    0.015     NA    657     1
+# WP474   WP474                                 Endochondral ossification       1/1 63/8421 0.0075    0.015     NA    657     1
+# WP4808 WP4808        Endochondral ossification with skeletal dysplasias       1/1 63/8421 0.0075    0.015     NA    657     1
+# WP5402 WP5402                            10q22q23 copy number variation       1/1 64/8421 0.0076    0.015     NA    657     1
+# WP2840 WP2840 Hair follicle development cytodifferentiation part 3 of 3       1/1 87/8421 0.0103    0.017     NA    657     1
+# WP5094 WP5094                                   Orexin receptor pathway       1/1 88/8421 0.0105    0.017     NA    657     1
+
+#### Gene Ontology enrichment analysis (biological process) HS Down ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_PreT_unique), mart = ensmebl)
+Down_HS_PreT_unique$ensembl_gene_id<-row.names(Down_HS_PreT_unique)
+
+merged <- merge(Down_HS_PreT_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+down_PreT_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_PreT_hs, showCategory = 15)
+
+dotplot(down_PreT_hs, showCategory=15)
+
+heatplot(down_PreT_hs, showCategory = 5)
+
+#### We perform KEGG enrichment analysis. HS Down ####
+
+down_PreT_hs_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(down_PreT_hs_wp, 10)
+
+# P5269 WP5269 Genetic causes of porto sinusoidal vascular disease      2/12 37/8421 0.0012    0.069  0.051 653361/2969     2
+
+### Subtype B ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_HS_B_unique), mart = ensmebl)
+Up_HS_B_unique$ensembl_gene_id<-row.names(Up_HS_B_unique)
+
+merged <- merge(Up_HS_B_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_B_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_B_hs, showCategory = 15)
+
+dotplot(up_B_hs, showCategory=15)
+
+heatplot(up_B_hs, showCategory = 5)
+
+#### We perform KEGG enrichment analysis. HS UP ####
+
+up_B_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 1)
+
+head(up_B_hs_kegg,10)
+
+#Results 
+# --> No gene can be mapped....
+# --> Expected input gene ID: 4536,2932,56413,4708,3356,9550
+# --> return NULL...
+
+
+#### For Down_HS_B_unique### 
+
+# We didn't compute anything becasue it's empty!!
+
+
+### Subtype T ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_HS_T_unique), mart = ensmebl)
+Up_HS_T_unique$ensembl_gene_id<-row.names(Up_HS_T_unique)
+
+merged <- merge(Up_HS_T_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_T_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_T_hs, showCategory = 15)
+
+dotplot(up_T_hs, showCategory=15)
+
+heatplot(up_T_hs, showCategory = 5)
+
+#### We perform KEGG enrichment analysis. HS UP ####
+
+up_T_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_T_hs_kegg,10)
+
+#Results 
+# WP1425 WP1425         Bone morphogenic protein signaling and regulation       1/1 12/8421 0.0014    0.015     NA    657     1
+# WP3874 WP3874               Canonical and non canonical TGF B signaling       1/1 17/8421 0.0020    0.015     NA    657     1
+# WP1591 WP1591                                         Heart development       1/1 47/8421 0.0056    0.015     NA    657     1
+# WP5053 WP5053                 Development of ureteric collection system       1/1 60/8421 0.0071    0.015     NA    657     1
+# WP5352 WP5352             10q11 21q11 23 copy number variation syndrome       1/1 61/8421 0.0072    0.015     NA    657     1
+# WP474   WP474                                 Endochondral ossification       1/1 63/8421 0.0075    0.015     NA    657     1
+# WP4808 WP4808        Endochondral ossification with skeletal dysplasias       1/1 63/8421 0.0075    0.015     NA    657     1
+# WP5402 WP5402                            10q22q23 copy number variation       1/1 64/8421 0.0076    0.015     NA    657     1
+# WP2840 WP2840 Hair follicle development cytodifferentiation part 3 of 3       1/1 87/8421 0.0103    0.017     NA    657     1
+# WP5094 WP5094                                   Orexin receptor pathway       1/1 88/8421 0.0105    0.017     NA    657     1
+
+#### Gene Ontology enrichment analysis (biological process) HS Down ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_T_unique), mart = ensmebl)
+Down_HS_T_unique$ensembl_gene_id<-row.names(Down_HS_T_unique)
+
+merged <- merge(Down_HS_T_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+down_T_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_T_hs, showCategory = 15)
+
+dotplot(down_T_hs, showCategory=15)
+
+heatplot(down_T_hs, showCategory = 5)
+
+#### We perform KEGG enrichment analysis. HS Down ####
+
+down_T_hs_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(down_T_hs_wp, 10)
+
+# P5269 WP5269 Genetic causes of porto sinusoidal vascular disease      2/12 37/8421 0.0012    0.069  0.051 653361/2969     2
 
 
 
 
 
-############ DEG adults vs pediatric of coruse just tumor ###### 
+
+
+############ DEG adults vs pediatric of course just tumor ###### 
 
 # clusterino_pam2 contains in Cell type columns the info on the subtypes
 info_age<-clusterino_pam2
@@ -1327,7 +1586,6 @@ table(DEGs_age_HS$class)
      
 
 #### UMAP DEGs pediatric-adult only HS  #### 
-library(umap)
 
 Totalage_HS_unique <- rownames(DEGs_age_HS[DEGs_age_HS$class != '=',])
 
