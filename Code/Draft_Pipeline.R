@@ -214,6 +214,7 @@ filter_counts_df <- total_adjusted1[filter_vec>=cond_tresh,]
 
 edge_c_total <- DGEList(counts = filter_counts_df, group=info_samples$condition, samples=info_samples, genes=filter_counts_df)
 edge_n_total <- calcNormFactors(edge_c_total,method = 'TMM')
+
 # We create the cpm table
 cpm_table <-as.data.frame(round(cpm(edge_n_total),2)) # the library size is scaled by the normalization factor
 
@@ -253,23 +254,15 @@ DEGs$class[which(DEGs$logCPM > 1 & DEGs$logFC < (-1.5))] = '-'
 DEGs <- DEGs[order(DEGs$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs$class)
-#rigth one   -756    + 2693   = 5986
-
 # AFTER ADDING NEW DATA
 #  - 736   + 2161   = 7555
   
-   
-
-
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes
-#  We have 110 down-reg HS genes and 18 up-regulated HS genes
+
 DEGs_Hsgenes <- DEGs %>% dplyr::filter(rownames(DEGs) %in% Human_genes$`Ensembl ID`)
 Up_HSgenes <- DEGs[DEGs$class=='+',] %>% dplyr::filter(rownames(DEGs[DEGs$class=='+',]) %in% Human_genes$`Ensembl ID`) 
 Down_HSgenes <- DEGs[DEGs$class=='-',] %>% dplyr::filter(rownames(DEGs[DEGs$class=='-',]) %in% Human_genes$`Ensembl ID`) 
-table(DEGs_Hsgenes$class)
-# after the filter of median more than 5 
-# down-reg 19 and 103 up reg
-# AFTER ADDING 12 down and 85 up 
+# AFTER ADDING 12 down and 85 up HS DEGs
 
 # Display the results using a volcano plot (x-axes: log FoldChange, y-axes: inverse function of the p-value).
 # We can see the most significant DEGs colored in green, which are genes that surpass a threshold set on both the p-value
@@ -485,12 +478,13 @@ fig2_nonHS
 clusterino_pam2$type <- 'pediatric'
 metadataGSE181157<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
 metadataGSE181157$`DFCI ID`<- rownames(clusterino_pam2)[1:173]# HERE I KEEP PRE-B AND PRE-T TYPES!
-for (row in 1:dim(metadata)[1]){
+for (row in 1:dim(metadataGSE181157)[1]){
   Age <- metadataGSE181157$`Age at Dx (years)`[row]  
   if (Age<=18){
     clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'pediatric'  } else{
       clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'adult'  }
 }
+
 metadata_choort_7_8 <- readxl::read_xlsx('../Tumors/Metadata_choort_7_8.xlsx', skip=1)
 
 for (row in 1:dim(metadata_choort_7_8)[1]){  Age <- metadata_choort_7_8$`Age (year)`[row]
@@ -967,8 +961,7 @@ Up_HS_PreT <- DEGs_subtype_PT[DEGs_subtype_PT$class=='+',] %>% dplyr::filter(row
 Down_HS_PreT<- DEGs_subtype_PT[DEGs_subtype_PT$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_PT_HS$class)
-#  We have 32 down-reg HS genes and 16 up-regulated HS genes
-# with new samples   - 45  + 14   = 186
+# with new samples   - 45  + 14   = 186 HS DEGs
     
 
 #### T subtype vs all other subtypes ####
@@ -1386,7 +1379,7 @@ dotplot(up_PreT_hs, showCategory=15)
 
 heatplot(up_PreT_hs, showCategory = 5)
 
-#### We perform KEGG enrichment analysis. HS UP ####
+### We perform KEGG enrichment analysis. HS UP ###
 
 up_PreT_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
 
@@ -1404,7 +1397,7 @@ head(up_PreT_hs_kegg,10)
 # WP2840 WP2840 Hair follicle development cytodifferentiation part 3 of 3       1/1 87/8421 0.0103    0.017     NA    657     1
 # WP5094 WP5094                                   Orexin receptor pathway       1/1 88/8421 0.0105    0.017     NA    657     1
 
-#### Gene Ontology enrichment analysis (biological process) HS Down ####
+### Gene Ontology enrichment analysis (biological process) HS Down ###
 
 convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_PreT_unique), mart = ensmebl)
 Down_HS_PreT_unique$ensembl_gene_id<-row.names(Down_HS_PreT_unique)
@@ -1419,7 +1412,7 @@ dotplot(down_PreT_hs, showCategory=15)
 
 heatplot(down_PreT_hs, showCategory = 5)
 
-#### We perform KEGG enrichment analysis. HS Down ####
+### We perform KEGG enrichment analysis. HS Down ###
 
 down_PreT_hs_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
 
@@ -1444,21 +1437,21 @@ dotplot(up_B_hs, showCategory=15)
 
 heatplot(up_B_hs, showCategory = 5)
 
-#### We perform KEGG enrichment analysis. HS UP ####
+### We perform KEGG enrichment analysis. HS UP ###
 
 up_B_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 1)
-
-head(up_B_hs_kegg,10)
-
 #Results 
 # --> No gene can be mapped....
 # --> Expected input gene ID: 4536,2932,56413,4708,3356,9550
 # --> return NULL...
 
+head(up_B_hs_kegg,10)
+#NULL
+
 
 #### For Down_HS_B_unique### 
 
-# We didn't compute anything becasue it's empty!!
+# We didn't compute anything because it's empty!!
 
 
 ### Subtype T ####
@@ -1478,50 +1471,280 @@ dotplot(up_T_hs, showCategory=15)
 
 heatplot(up_T_hs, showCategory = 5)
 
-#### We perform KEGG enrichment analysis. HS UP ####
+### We perform KEGG enrichment analysis. HS UP ###
 
 up_T_hs_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+# --> No gene can be mapped....
+# --> Expected input gene ID: 29933,8390,2878,4722,9551,539
+# --> return NULL...
 
 head(up_T_hs_kegg,10)
 
 #Results 
-# WP1425 WP1425         Bone morphogenic protein signaling and regulation       1/1 12/8421 0.0014    0.015     NA    657     1
-# WP3874 WP3874               Canonical and non canonical TGF B signaling       1/1 17/8421 0.0020    0.015     NA    657     1
-# WP1591 WP1591                                         Heart development       1/1 47/8421 0.0056    0.015     NA    657     1
-# WP5053 WP5053                 Development of ureteric collection system       1/1 60/8421 0.0071    0.015     NA    657     1
-# WP5352 WP5352             10q11 21q11 23 copy number variation syndrome       1/1 61/8421 0.0072    0.015     NA    657     1
-# WP474   WP474                                 Endochondral ossification       1/1 63/8421 0.0075    0.015     NA    657     1
-# WP4808 WP4808        Endochondral ossification with skeletal dysplasias       1/1 63/8421 0.0075    0.015     NA    657     1
-# WP5402 WP5402                            10q22q23 copy number variation       1/1 64/8421 0.0076    0.015     NA    657     1
-# WP2840 WP2840 Hair follicle development cytodifferentiation part 3 of 3       1/1 87/8421 0.0103    0.017     NA    657     1
-# WP5094 WP5094                                   Orexin receptor pathway       1/1 88/8421 0.0105    0.017     NA    657     1
+# NULL
 
-#### Gene Ontology enrichment analysis (biological process) HS Down ####
+#### For Down_HS_T_unique### 
 
-convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_HS_T_unique), mart = ensmebl)
-Down_HS_T_unique$ensembl_gene_id<-row.names(Down_HS_T_unique)
-
-merged <- merge(Down_HS_T_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
-
-down_T_hs <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
-
-barplot(down_T_hs, showCategory = 15)
-
-dotplot(down_T_hs, showCategory=15)
-
-heatplot(down_T_hs, showCategory = 5)
-
-#### We perform KEGG enrichment analysis. HS Down ####
-
-down_T_hs_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
-
-head(down_T_hs_wp, 10)
-
-# P5269 WP5269 Genetic causes of porto sinusoidal vascular disease      2/12 37/8421 0.0012    0.069  0.051 653361/2969     2
+# We didn't compute anything because it's empty!!
 
 
+#### GSEA subtypes all genes ####
+
+### Subtype pre-B ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_subtype_PreB_unique), mart = ensmebl)
+Up_subtype_PreB_unique$ensembl_gene_id<-row.names(Up_subtype_PreB_unique)
+
+merged <- merge(Up_subtype_PreB_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_PreB <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_PreB, showCategory = 15)
+
+dotplot(up_PreB, showCategory=15)
+
+heatplot(up_PreB, showCategory = 5)
+
+###We perform KEGG enrichment analysis. HS UP ###
+
+up_PreB_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_PreB_hs_kegg,10)
+
+#Results 
+# WP2328 WP2328                            Allograft rejection      7/68  90/8421 7.186176e-06 0.0009049959 0.0008384876
+# WP4217 WP4217                  Ebola virus infection in host      8/68 129/8421 8.340976e-06 0.0009049959 0.0008384876
+# WP244   WP244               Alpha 6 beta 4 signaling pathway      4/68  33/8421 1.334009e-04 0.0096493294 0.0089401985
+# WP3932 WP3932 Focal adhesion PI3K Akt mTOR signaling pathway      9/68 302/8421 6.669396e-04 0.0361814732 0.0335224904
+
+###Gene Ontology enrichment analysis (biological process) HS Down ###
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_subtype_PreB_unique), mart = ensmebl)
+Down_subtype_PreB_unique$ensembl_gene_id<-row.names(Down_subtype_PreB_unique)
+
+merged <- merge(Down_subtype_PreB_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+down_PreB <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_PreB, showCategory = 15)
+
+dotplot(down_PreB, showCategory=15)
+
+heatplot(down_PreB, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS Down ###
+
+down_PreB_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(down_PreB_wp, 10)
+
+# Results:
+# WP5072 WP5072                          Modulators of TCR signaling and T cell activation    10/125  61/8421 1.719441e-08 4.470546e-06 4.253353e-06
+# WP69     WP69                                          T cell receptor signaling pathway    10/125  75/8421 1.326703e-07 1.724714e-05 1.640922e-05
+# WP3863 WP3863 T cell antigen receptor TCR pathway during Staphylococcus aureus infection     9/125  62/8421 2.739663e-07 2.374375e-05 2.259020e-05
+# WP4884 WP4884                  Pathogenesis of SARS CoV 2 mediated by nsp9 nsp10 complex     6/125  21/8421 4.288529e-07 2.787544e-05 2.652117e-05
+# WP5098 WP5098                                               T cell activation SARS CoV 2    10/125  88/8421 6.140328e-07 3.192971e-05 3.037846e-05
+# WP4585 WP4585                                      Cancer immunotherapy by PD 1 blockade     5/125  23/8421 1.806370e-05 7.827605e-04 7.447316e-04
+# WP5130 WP5130                                          Th17 cell differentiation pathway     7/125  70/8421 7.406990e-05 2.751168e-03 2.617508e-03
+# WP5115 WP5115                                Network map of SARS CoV 2 signaling pathway    12/125 218/8421 8.974658e-05 2.916764e-03 2.775059e-03
+# WP4494 WP4494     Selective expression of chemokine receptors during T cell polarization     4/125  30/8421 9.404194e-04 2.716767e-02 2.584779e-02
+# WP5142 WP5142      Calcium mediated T cell apoptosis involved in inclusion body myositis     3/125  20/8421 3.026474e-03 7.868831e-02 7.486540e-02
 
 
+### Subtype pre-T ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_subtype_PreT_unique), mart = ensmebl)
+Up_subtype_PreT_unique$ensembl_gene_id<-row.names(Up_subtype_PreT_unique)
+
+merged <- merge(Up_subtype_PreT_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_PreT <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_PreT, showCategory = 15)
+
+dotplot(up_PreT, showCategory=15)
+
+heatplot(up_PreT, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS UP ###
+
+up_PreT_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_PreT_kegg,10)
+
+#Results 
+# WP69     WP69                                          T cell receptor signaling pathway    11/147  75/8421 5.926124e-08 9.884704e-06 9.330892e-06
+# WP5072 WP5072                          Modulators of TCR signaling and T cell activation    10/147  61/8421 8.143396e-08 9.884704e-06 9.330892e-06
+# WP3863 WP3863 T cell antigen receptor TCR pathway during Staphylococcus aureus infection    10/147  62/8421 9.565842e-08 9.884704e-06 9.330892e-06
+# WP4884 WP4884                  Pathogenesis of SARS CoV 2 mediated by nsp9 nsp10 complex     6/147  21/8421 1.116928e-06 8.656190e-05 8.171208e-05
+# WP5098 WP5098                                               T cell activation SARS CoV 2    10/147  88/8421 2.726557e-06 1.690465e-04 1.595753e-04
+# WP5115 WP5115                                Network map of SARS CoV 2 signaling pathway    15/147 218/8421 5.579600e-06 2.882793e-04 2.721279e-04
+# WP5130 WP5130                                          Th17 cell differentiation pathway     8/147  70/8421 2.695415e-05 1.193684e-03 1.126805e-03
+# WP2583 WP2583                               T cell receptor and co stimulatory signaling     5/147  28/8421 1.076340e-04 4.170819e-03 3.937140e-03
+# WP4585 WP4585                                      Cancer immunotherapy by PD 1 blockade     4/147  23/8421 6.095664e-04 2.099617e-02 1.981982e-02
+# WP5078 WP5078                                     T cell modulation in pancreatic cancer     5/147  46/8421 1.166540e-03 3.616275e-02 3.413665e-02
+# geneID Count
+# WP69                     920/5588/9402/8631/925/29851/940/3932/919/916/27040    11
+# WP5072                        5588/9402/921/925/53347/940/3932/919/916/27040    10
+# WP3863                       920/5588/9402/959/925/29851/940/3932/5133/27040    10
+# WP4884                                              920/914/925/3932/919/916     6
+# WP5098                      920/5588/9402/64798/29851/940/3932/919/916/27040    10
+# WP5115 3075/3675/920/5588/7850/7173/914/8631/814/925/64798/9332/3932/919/916    15
+# WP5130                                 920/5588/2625/6097/3932/919/916/27040     8
+# WP2583                                                925/5578/940/3932/5133     5
+# WP4585                                                     925/3932/5133/916     4
+# WP5078                                               959/29851/940/7293/5133     5
+
+### Gene Ontology enrichment analysis (biological process) HS Down ###
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_subtype_PreT_unique), mart = ensmebl)
+Down_subtype_PreT_unique$ensembl_gene_id<-row.names(Down_subtype_PreT_unique)
+
+merged <- merge(Down_subtype_PreT_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+down_PreT <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_PreT, showCategory = 15)
+
+dotplot(down_PreT, showCategory=15)
+
+heatplot(down_PreT, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS Down ###
+
+down_PreT_wp <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(down_PreT_wp, 10)
+
+# Results:
+# WP2328 WP2328                                            Allograft rejection    21/382  90/8421 3.409704e-10 1.711671e-07 1.557696e-07
+# WP5218 WP5218 Extrafollicular and follicular B cell activation by SARS CoV 2    17/382  76/8421 3.343284e-08 8.391643e-06 7.636765e-06
+# WP23     WP23                              B cell receptor signaling pathway    16/382  92/8421 3.129697e-06 5.237027e-04 4.765925e-04
+# WP5033 WP5033  Genes associated with the development of rheumatoid arthritis     7/382  18/8421 7.713134e-06 9.679983e-04 8.809211e-04
+# WP4217 WP4217                                  Ebola virus infection in host    18/382 129/8421 1.901616e-05 1.909222e-03 1.737476e-03
+# WP3932 WP3932                 Focal adhesion PI3K Akt mTOR signaling pathway    29/382 302/8421 1.012238e-04 8.469060e-03 7.707218e-03
+# WP2877 WP2877                                     Vitamin D receptor pathway    20/382 187/8421 3.026050e-04 1.851162e-02 1.684639e-02
+# WP5053 WP5053                      Development of ureteric collection system    10/382  60/8421 3.237148e-04 1.851162e-02 1.684639e-02
+# WP4172 WP4172                                     PI3K Akt signaling pathway    30/382 341/8421 3.621089e-04 1.851162e-02 1.684639e-02
+# WP4658 WP4658                                         Small cell lung cancer    13/382  96/8421 3.687573e-04 1.851162e-02 1.684639e-02
+
+### Subtype B ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_subtype_B_unique), mart = ensmebl)
+Up_subtype_B_unique$ensembl_gene_id<-row.names(Up_subtype_B_unique)
+
+merged <- merge(Up_subtype_B_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_B <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_B, showCategory = 15)
+
+dotplot(up_B, showCategory=15)
+
+heatplot(up_B, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS UP ###
+
+up_B_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 1)
+
+head(up_B_kegg,10)
+#Resutls:
+# WP3927 WP3927                 BMP signaling in eyelid development       1/4  20/8421 0.009467949 0.04648352 0.01631001   3625     1
+# WP2203 WP2203 Thymic stromal lymphopoietin TSLP signaling pathway       1/4  40/8421 0.018868508 0.04648352 0.01631001  64109     1
+# WP2324 WP2324                                    AGE RAGE pathway       1/4  66/8421 0.030989010 0.04648352 0.01631001   3625     1
+# WP2369 WP2369                               Histone modifications       1/4  66/8421 0.030989010 0.04648352 0.01631001   9757     1
+# WP536   WP536                 Calcium regulation in cardiac cells       1/4 152/8421 0.070281209 0.07207918 0.02529094   6004     1
+# WP289   WP289      Myometrial relaxation and contraction pathways       1/4 156/8421 0.072079178 0.07207918 0.02529094   6004     1
+
+#### For Down_HS_B_unique### 
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_subtype_B_unique), mart = ensmebl)
+Down_subtype_B_unique$ensembl_gene_id<-row.names(Down_subtype_B_unique)
+
+merged <- merge(Down_subtype_B_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+down_B <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+# No gene sets have size between 10 and 500 ...
+# --> return NULL...
+barplot(down_B, showCategory = 15)
+
+dotplot(down_B, showCategory=15)
+
+heatplot(down_B, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS UP ###
+
+down_B_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 1)
+
+head(down_B_kegg,10)
+
+# --> No gene can be mapped....
+# --> Expected input gene ID: 1268,11245,539,7078,1349,64066
+# --> return NULL...
+
+### Subtype T ####
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Up_subtype_T_unique), mart = ensmebl)
+Up_subtype_T_unique$ensembl_gene_id<-row.names(Up_subtype_T_unique)
+
+merged <- merge(Up_subtype_T_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+up_T <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(up_T, showCategory = 15)
+
+dotplot(up_T, showCategory=15)
+
+heatplot(up_T, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS UP ###
+
+up_T_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 0.1, qvalueCutoff = 0.1 )
+
+head(up_T_kegg,10)
+
+#Results 
+# [1] ID          Description GeneRatio   BgRatio     pvalue      p.adjust    qvalue      geneID      Count      
+# <0 rows> (or 0-length row.names)
+
+#### For Down_HS_T_unique### 
+
+convert <- getBM(attributes =c('ensembl_gene_id','entrezgene_id','external_gene_name'),filters = c('ensembl_gene_id'), values = row.names(Down_subtype_T_unique), mart = ensmebl)
+Down_subtype_T_unique$ensembl_gene_id<-row.names(Down_subtype_T_unique)
+
+merged <- merge(Down_subtype_T_unique, convert, by.x = 'ensembl_gene_id', by.y = 'ensembl_gene_id')
+
+#### Gene Ontology enrichment analysis (biological process) HS UP ###
+
+down_T <- enrichGO(gene = merged$external_gene_name, OrgDb = org.Hs.eg.db, keyType = 'SYMBOL',ont = 'BP',pAdjustMethod = 'BH',pvalueCutoff = 1, qvalueCutoff = 1)
+
+barplot(down_T, showCategory = 15)
+
+dotplot(down_T, showCategory=15)
+
+heatplot(down_T, showCategory = 5)
+
+### We perform KEGG enrichment analysis. HS UP ###
+
+down_T_kegg <- enrichWP(gene =merged$entrezgene_id, organism = 'Homo sapiens', pvalueCutoff = 1, qvalueCutoff = 1)
+
+head(down_T_kegg,10)
+
+# --> No gene can be mapped....
+# --> Expected input gene ID: 1268,11245,539,7078,1349,64066
+# --> return NULL...
 
 
 
@@ -1582,7 +1805,7 @@ Up_HS_age <- DEGs_age[DEGs_age$class=='+',] %>% dplyr::filter(rownames(DEGs_age[
 Down_HS_age<- DEGs_age[DEGs_age$class=='-',] %>% dplyr::filter(rownames(DEGs_age[DEGs_age$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_age_HS$class)
-# after change  - 8   + 7  = 115
+# after change  - 9   + 6  = 115
      
 
 #### UMAP DEGs pediatric-adult only HS  #### 
