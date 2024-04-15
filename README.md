@@ -33,23 +33,14 @@ Project developed by:
 | GSE162562  | Blood                       | All                       | 5              | 5               | 0              | Unknown         |
 | GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
 ## Goals
-- Data Preprocessing
 - Exploratory Data Analysis (EDA)
-- Feature Selection/Extraction
+- Differential expression analysis
 - Machine Learning Models
-- Validation and Evaluation
 - Biological Interpretation
 - `work in progress`
 
 ## Tools and Technologies
 - Programming Languages: Python, R
-- Bioinformatics Libraries:
-- Machine Learning Libraries: 
-- Data Visualization:
   
 ## License
-- [MIT License](LICENSE) we should decide a licence 
-
-## Contact
-- [Maintainer Name(s)]
-- [Email Address(es)]
+- [MIT License](LICENSE)
