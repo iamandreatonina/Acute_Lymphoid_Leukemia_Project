@@ -1,4 +1,4 @@
-# Acute Lymphoid Leukemia Bioinformatics Project
+<h1 align="center">Acute Lymphoid Leukemia Bioinformatics Project</h1>
 <p align="center">
   <img src="https://github.com/iamandreatonina/Acute_Lymphoid_Leukemia_Project/blob/7ca87024738060e9759e61d6bab092412cec4f6a/Images/temp_new_logo.jpeg" width = 300 alt="group_logo">
 </p>
