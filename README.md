@@ -1,5 +1,16 @@
 # Acute Lymphoid Leukemia Bioinformatics Project
 
+## Authors
+
+Project developed by: 
+  * [Andrea Tonina](https://github.com/iamandreatonina)
+  * [Gloria Lugoboni](https://github.com/GloriaLugoboni)
+  * [Lorenzo Santarelli](https://github.com/Lor-Santa)
+  * [Thomas Sirchi](https://github.com/Thokas99)
+'All authors contribute equally'
+
+<img src="https://github.com/iamandreatonina/Laboratory_Biological_Data_Mining/blob/main/Logo_group/photo_5929434998077767761_y.jpg" width = 300  alt ="group_logo" />
+
 ## Overview
 - Analyzing data related to Acute Lymphoid Leukemia (ALL)
 - Utilizing bioinformatics techniques
