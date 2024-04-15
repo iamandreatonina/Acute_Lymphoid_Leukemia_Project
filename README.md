@@ -30,15 +30,8 @@
 - Programming Languages: Python, R
 - Bioinformatics Libraries:
 - Machine Learning Libraries: 
-- Data Visualization: 
-
-## Usage
-- do we need this section?
-
-## Contributing
-- Contributions welcome
-- Open an issue for major changes
-
+- Data Visualization:
+  
 ## License
 - [MIT License](LICENSE) we should decide a licence 
 
