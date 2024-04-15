@@ -7,7 +7,8 @@ Project developed by:
   * [Gloria Lugoboni](https://github.com/GloriaLugoboni)
   * [Lorenzo Santarelli](https://github.com/Lor-Santa)
   * [Thomas Sirchi](https://github.com/Thokas99)
-'All authors contribute equally'
+
+`All authors contribute equally`
 
 <img src="https://github.com/iamandreatonina/Laboratory_Biological_Data_Mining/blob/main/Logo_group/photo_5929434998077767761_y.jpg" width = 300  alt ="group_logo" />
 
