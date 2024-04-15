@@ -43,4 +43,4 @@ Project developed by:
 - Programming Languages: Python, R
   
 ## License
-- [MIT License](LICENSE)
+- [MIT License](https://github.com/iamandreatonina/Acute_Lymphoid_Leukemia_Project/blob/f7393ab2dc77904c48b9ea16d3ea33ee49b42b36/LICENSE))
