@@ -60,5 +60,27 @@ This document explains the evaluation metrics commonly used for multiclass class
 - **Focus**: Provides a balanced evaluation metric considering both false positives and false negatives.
 
 ---
+## Feature Importance in Random Forest (RF)
 
-When interpreting these metrics, it's essential to consider the specific requirements and context of the classification problem to make informed decisions about model optimization and selection.
+### Definition
+Feature importance in RF quantifies each feature's contribution to the model's predictions based on the decrease in impurity when splitting the data.
+
+### Calculation
+- Permutation method, as implemented in the [Ranger library](https://github.com/imbs-hl/ranger) in R.
+- Local permutation enables to recover the class-specific importance.
+  
+### Interpretation
+- Higher importance indicates more influence on predictions.
+- Lower importance suggests less relevance to the target variable.
+- Negative importance suggests a negative impact on prediction.
+
+### Visualization
+- Importance scores can be visualized using bar plots in the related [image folder](https://github.com/iamandreatonina/Acute_Lymphoid_Leukemia_Project/tree/2f02a06eda1f30ab781c197093682e0671d7637c/Images/ML_importance).
+
+### Importance in Practice
+- **Insights**: Reveals relationships between features and the target.
+- **Feature Selection**: Guides feature selection for improved model efficiency.
+- **Interpretability**: Enhances model interpretability by highlighting influential features.
+
+
+
