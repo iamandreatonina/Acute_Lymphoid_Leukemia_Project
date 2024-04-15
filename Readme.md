@@ -1,15 +1,15 @@
 <h1 align="center">Characterization and predictive role of human-specific genes in Acute Lymphoblastic Leukemia (?)</h1>
----
+
 ## Authors
 <p align="right">
   <img src="https://github.com/iamandreatonina/Acute_Lymphoid_Leukemia_Project/blob/7ca87024738060e9759e61d6bab092412cec4f6a/Images/temp_new_logo.jpeg" width = 300 alt="group_logo">
-</p>
+
 Project developed by: 
   * [Andrea Tonina](https://github.com/iamandreatonina)
   * [Gloria Lugoboni](https://github.com/GloriaLugoboni)
   * [Lorenzo Santarelli](https://github.com/Lor-Santa)
   * [Thomas Sirchi](https://github.com/Thokas99)
-
+</p>
 `All authors contribute equally`
 
 ## Overview
