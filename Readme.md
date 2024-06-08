@@ -111,8 +111,13 @@ This project is licensed under the MIT License. Please take a look at the [LICEN
 For any questions or comments, please open an issue on this repository or contact the authors via email.
 
 ---
-
-[University of Trento](https://www.unitn.it/)
 <div align="center">
   <img src="Images/uni_logo.jpg" alt="drawing" width="300"/>
 </div>
+
+<p align="center">
+  <img src="Images/logos/cibio.jpg" alt="Image 1" width="200" />
+  <img src="Images/logos/disi.jpg" alt="Image 2" width="200" />
+  <img src="Images/logos/imem.png" alt="Image 3" width="200" />
+  <img src="Images/logos/amd.png" alt="Image 4" width="200" />
+</p>
