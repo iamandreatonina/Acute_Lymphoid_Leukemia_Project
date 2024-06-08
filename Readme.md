@@ -1,10 +1,13 @@
 <h1 align="center">Characterization and predictive role of human-specific genes in Acute Lymphoblastic Leukemia</h1> 
 
 ## Table of Contents
+- [Authors](#authors)
 - [Overview](#overview)
+- [Dataset](#dataset)
+- [Overview (Detailed)](#overview-detailed)
 - [Motivation](#motivation)
   - [Background](#background)
-  - [Acute Lymphoblastic Leukemia](#acute-lymphoblastic-leukemia)
+  - [Acute Lymphoblastic Leukemia (ALL)](#acute-lymphoblastic-leukemia-all)
   - [Study Objective](#study-objective)
 - [Methods](#methods)
   - [Data Collection](#data-collection)
@@ -22,7 +25,6 @@
 - [Repository Contents](#repository-contents)
 - [Supplementary Information](#supplementary-information)
 - [License](#license)
-- [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
 
 ## Authors
