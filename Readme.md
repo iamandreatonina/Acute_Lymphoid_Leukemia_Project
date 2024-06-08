@@ -1,5 +1,30 @@
 <h1 align="center">Characterization and predictive role of human-specific genes in Acute Lymphoblastic Leukemia</h1> 
 
+## Table of Contents
+- [Overview](#overview)
+- [Motivation](#motivation)
+  - [Background](#background)
+  - [Acute Lymphoblastic Leukemia](#acute-lymphoblastic-leukemia)
+  - [Study Objective](#study-objective)
+- [Methods](#methods)
+  - [Data Collection](#data-collection)
+  - [Data Preprocessing](#data-preprocessing)
+  - [Differential Gene Expression Analysis](#differential-gene-expression-analysis)
+  - [Extraction of Human-Specific Genes](#extraction-of-human-specific-genes)
+  - [Enrichment and Pathway Analysis](#enrichment-and-pathway-analysis)
+  - [Classification and Predictive Modeling](#classification-and-predictive-modeling)
+- [Results](#results)
+  - [Differential Gene Expression](#differential-gene-expression)
+  - [Enrichment Analysis](#enrichment-analysis)
+  - [Predictive Modeling](#predictive-modeling)
+  - [Key Genes Identified](#key-genes-identified)
+- [Conclusion](#conclusion)
+- [Repository Contents](#repository-contents)
+- [Supplementary Information](#supplementary-information)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+- [Contact](#contact)
+
 ## Authors
 
 Project developed by: 
