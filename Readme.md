@@ -64,7 +64,7 @@ A reference list of human-specific genes, derived from existing literature, was 
 - **Pathway Analysis:** WikiPathway was utilized to perform pathway analysis, identifying key pathways involving the identified DEGs.
 
 ### Classification and Predictive Modeling
-- **Methodology:** Various classification methods were implemented using R libraries, including ensemble methods, gradient boosting, and CPU-based deep learning.
+- **Methodology:** Various classification methods were implemented using R libraries, including ensemble methods, non-parametric, and CPU-based deep learning.
 - **Training and Validation:** The classifiers were trained on differentially expressed human-specific genes. A three-fold cross-validation with two repeats was used, employing the ADASYN algorithm for balanced sampling.
 - **Hyperparameter Tuning:** Hyperparameters were tuned using Latin hypercube sampling followed by Simulated Annealing, executed for 25 search iterations.
 - **Model Evaluation:** Post-classification, variable importance was extracted from the models, and features were ranked.
