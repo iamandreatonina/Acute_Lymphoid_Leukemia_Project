@@ -82,7 +82,7 @@ We developed a consensus classifier capable of accurately associating unknown da
 - **F Mean Score:** Approximately  0.81
 - **Kappa Mean Score:** Approximately 0.75
 <div align="center">
-  <img src="Code/ML/HS/line_plot_Metrics.png" alt="drawing" width="500"/>
+  <img src="Code/ML/HS/line_plot_Metrics.png" alt="drawing" width="400"/>
 </div>
 
 ### Key Genes Identified
@@ -91,7 +91,7 @@ Among the human-specific genes with high importance in our models, we identified
 - **MYO7B:** A known proto-oncogenic driver.
 - **RAB6C:** A member of the RAS oncogene family.
 <div align="center">
-  <img src="Code/ML/HS/big_imp_plot_2.png" alt="drawing" width="500"/>
+  <img src="Code/ML/HS/big_imp_plot_2.png" alt="drawing" width="400"/>
 </div>
 
 ### Conclusion
@@ -111,10 +111,6 @@ This project is licensed under the MIT License. Please take a look at the [LICEN
 For any questions or comments, please open an issue on this repository or contact the authors via email.
 
 ---
-<div align="center">
-  <img src="Images/uni_logo.jpg" alt="drawing" width="300"/>
-</div>
-
 <p align="center">
   <img src="Images/logos/cibio.jpg" alt="Image 1" width="200" />
   <img src="Images/logos/disi.jpg" alt="Image 2" width="200" />
