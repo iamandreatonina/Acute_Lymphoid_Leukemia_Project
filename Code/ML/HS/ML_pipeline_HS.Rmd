@@ -1,0 +1,786 @@
+---
+title: "ML_Trial"
+author: "Andrea,Gloria,Lorenzo,Thomas"
+date: "`r Sys.Date()`"
+output: html_document
+---
+# Preparatory steps
+  Loading packages
+  Store package names in a vectors for ease of access and to load them easily 
+```{r Setup, message=FALSE, warning=FALSE}
+# Define a list of packages to be loaded
+PACKAGES <- c(
+  "glmnet",          # For the LASSO regression 
+  "xgboost",         # For the XGBoost (Extreme Gradient Boosting) method
+  "ggplot2",         # For data visualization
+  "plotly",          # Interactive plots
+  "RColorBrewer",    # Color palettes for better visualizations
+  "umap",            # Uniform Manifold Approximation and Projection for dimensional reduction
+  "tidymodels",      # Tidy modeling framework for machine learning
+  "tidyverse",        # Collection of packages for data manipulation and visualization
+  "finetune",
+  "torch",
+  "themis",
+  "gprofiler2"
+)
+
+
+# Load the specified packages
+invisible(lapply(PACKAGES, library, character.only = TRUE))
+gc()
+
+```
+
+## Managing the data to use
+
+```{r Data to use, warning=FALSE}
+# Load the data
+#setwd("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/data/ML_for_ALL/Table_cpm")
+
+
+ML_data <- read.csv("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/data/ML_for_ALL/Table_cpm/Total_cpm_log_expression_table_Human_specific_in_DEG.csv")
+row.names(ML_data) <- ML_data$X
+ML_data$X <- NULL
+ML_data <- data.frame(t(ML_data))
+ML_data$X <- rownames(ML_data)
+
+Labels <- read.csv("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/data/Datasets/Post_manipulation/meta_for_ML.csv")
+row.names(Labels) <- Labels$X
+
+merged_df <- merge(ML_data, Labels, by = "X")
+rownames(merged_df) <- merged_df$X
+merged_df$X <- NULL
+merged_df$X.pam2.clustering. <- NULL
+merged_df$type <- NULL
+#write.csv(merged_df,file = "ML_TOT_DEG.csv", row.names = T)
+ML_data <- merged_df
+
+
+
+
+# Find the row indices in data that have 'Unknown' labels
+unknown_indices <- which(ML_data$Cell_type == 'Unknown')
+
+rm(merged_df,Labels)
+```
+
+## Number coating
+
+```{r Current otimal way  }
+# Number coating the values, specify the columns to be label encoded
+columns_to_encode <- c("Cell_type")
+
+# Create a new data frame without rows where 'Cell_type' has value "Unknown"
+my_data_train <- subset(ML_data, Cell_type != "Unknown")
+Unkown_data <- subset(ML_data, Cell_type == "Unknown")
+
+# Convert specified columns to factor type
+my_data_train <- my_data_train %>% mutate_at(columns_to_encode, as.factor)
+Unkown_data <- Unkown_data %>% mutate_at(columns_to_encode, as.factor)
+## as numbers
+#train_data_numeric <- my_data_train %>% mutate_at(columns_to_encode, as.numeric)
+
+# Create a dictionary-like structure to store the labels
+## The order corresponds to the number
+my_levels <- list(Cell_type = levels(my_data_train$Cell_type)
+)
+
+rm(columns_to_encode)
+```
+
+
+```{r Split tidymodels }
+set.seed(1234)
+# Create a data split
+#lables_train <- my_data_train$Cell_type
+
+data_split <- initial_split(my_data_train, strata = Cell_type,prop = 0.7)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# Create a recipe
+recipe <- recipe(Cell_type ~ ., data = train_data)%>%
+  step_adasyn(Cell_type) %>%
+  step_ns()
+  #step_smotenc(Cell_type, over_ratio = 0.5)
+
+# Perform cross-validation
+cv_folds <- vfold_cv(train_data, strata = Cell_type, v = 3, repeats = 2)
+
+# set metrics 
+class_metrics <- metric_set(accuracy, kap)
+
+```
+
+## LASSO (Least Absolute Shrinkage and Selection Operator)
+
+```{r Create parallel cluster}
+cl <- parallel::makePSOCKcluster(5)
+doParallel::registerDoParallel(cl)
+```
+
+```{r Tuning LASSO}
+set.seed(1234)
+Lasso_data <- train_data_numeric
+Lasso_data_f <- ML_data
+
+# Extract data without labels
+X <- as.matrix(Lasso_data[, -which(colnames(Lasso_data) == "Cell_type")])
+
+# Fit cross-validated Lasso model
+cv_lasso <- cv.glmnet(x = X,
+                      y = Lasso_data$Cell_type, 
+                      alpha = 0.5, 
+                      grouped = FALSE,
+                      parallel = TRUE,
+                      relax = TRUE,
+                      type.measure ="mse",
+                      family = "gaussian",
+                      type.gaussian = "naive",
+                      nfolds = 15)
+plot(cv_lasso)
+abline(v = log(cv_lasso$lambda.min), col = "red", lty = 2)
+abline(v = log(cv_lasso$lambda.1se), col = "green", lty = 2)
+
+optimal_lambda <- cv_lasso$relaxed$lambda.min
+```
+
+```{r Fit LASSO}
+set.seed(1234)
+# Extract predictors and response
+X <- as.matrix(subset(Lasso_data, select = -ncol(Lasso_data)))  # Exclude the response variable
+y <- as.matrix(Lasso_data$Cell_type)
+
+# Fit a lasso regression model
+lasso_model <- glmnet(X, y, 
+                      alpha = 0.5, 
+                      lambda = optimal_lambda,
+                      family = "gaussian",
+                      parallel = TRUE,
+                      type.measure = "mse",
+                      type.gaussian = "naive",
+                      relax = TRUE)
+                      
+
+# Display selected features
+plot(coef(lasso_model, s = optimal_lambda))
+
+to_filter <- names(lasso_model$beta[, 1][lasso_model$beta[, 1] != 0])
+names_imp <- data.frame(lasso_model$beta[, 1][lasso_model$beta[, 1] != 0])
+# Extract non-zero coefficients from the Lasso model
+selected_features <- coef(lasso_model, s = optimal_lambda, exact = TRUE, x = X, y = y)
+
+# Filter the original dataset based on selected features
+
+my_data_train <- subset(Lasso_data_f, select = to_filter)
+#create full copy for later
+#ML_data_ecoded <- ML_data 
+
+Cell_type <- Lasso_data_f$Cell_type
+my_data_train <- cbind(my_data_train, Cell_type)
+Unkown_data <- subset(my_data_train, Cell_type == "Unkown")
+my_data_train <- subset(my_data_train, Cell_type != "Unkown")
+
+
+#setwd("D:/VarieTHOM/University/QCB/3_SEMESTRE/Data Mining/Laboratory (Blanzieri)/0_PROJECT/Datasets_finals/ML_nonHS")
+#write.csv(my_data_train, file = 'CPM_nonHS_LASSO_relax.csv', row.names = TRUE)
+
+# Remove unnecessary objects
+rm(X, y, selected_features,optimal_lambda,names_imp,Lasso_data,Lasso_data_f,lasso_model,cv_lasso)
+
+```
+
+# Random Forest:
+
+```{r RF with cross validation from tidymodels}
+set.seed(1235)
+# Define the model specification with the ranger engine
+rf_spec <- 
+  rand_forest(min_n = tune(), # 5
+              trees = 500,
+              mtry = tune()) %>% # 19		
+  set_mode("classification") %>%
+  set_engine("ranger", num.threads = 10, importance = "permutation") #permutation
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(rf_spec) %>% finalize(train_data)
+
+# Define the search grid for tuning
+tree_grid <- grid_latin_hypercube(draft,size = 15)
+
+# Create the tuning workflow
+tuned_rf_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(rf_spec)
+
+tune_1 <- tune_grid(tuned_rf_workflow,resamples = cv_folds, grid = tree_grid)
+autoplot(tune_1, metric = "accuracy")
+
+tune_2 <- tune_sim_anneal(tuned_rf_workflow,resamples = cv_folds, iter = 30, initial = tune_1, metrics = class_metrics)
+autoplot(tune_2, metric = "accuracy")
+
+# Collect tuning results
+tuning_results <- show_best(tune_2, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_2 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+rf_model_final <- finalize_model(x = rf_spec, parameters = best_params)
+
+# Fit the model
+rf_fit <- rf_model_final %>%
+  last_fit(recipe,split = data_split)
+
+#rm(rf_spec, draft, tree_grid, tuned_rf_workflow, tuning_results, best_params, rf_model_final)
+```
+
+```{r RF for fast calculus}
+# Define the model specification with the ranger engine
+rf_spec <-   rand_forest(min_n = 4,
+              trees = 500,
+              mtry = 11) %>% 	
+  set_mode("classification") %>%
+  set_engine("ranger", num.threads = 10, importance = "permutation",local.importance = TRUE) #,local.importance = TRUE
+
+# Fit the model
+"rf_fit <- rf_spec %>%
+  fit(Cell_type ~ ., data = train_data)"
+
+
+rf_fit <- rf_spec %>%
+  fit(Cell_type ~ ., data = my_data_train)
+
+
+```
+
+
+```{r Plots for RF}
+set.seed(1234)
+# Extract predictions
+predictions <- extract_workflow(rf_fit) %>%
+  predict(new_data = test_data) %>%
+  dplyr::mutate(Cell_type = test_data$Cell_type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = Cell_type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap")
+# Extract variable importance with p_value
+rf_tree <- extract_fit_engine(rf_fit)
+RF_var_importance <- 
+  data.frame(importance = ranger::importance(rf_tree)) %>%
+  dplyr::mutate(Ens_id = rownames(.)) %>%
+  dplyr::arrange(desc(importance))
+
+imp_gene_names <- gconvert(query = RF_var_importance$Ens_id, organism = "hsapiens", 
+         target="ENSG", mthreshold = Inf, filter_na = TRUE)
+
+RF_var_importance$Ens_id <- imp_gene_names$name
+RF_var_importance$description <- imp_gene_names$description
+#write.csv(RF_var_importance, "importance_matrix_RF.csv", row.names = T)
+
+# Define thresholds for categorization
+high_threshold <- max(RF_var_importance$importance) * 0.5
+medium_threshold <- max(RF_var_importance$importance) * 0.2
+
+# Categorize values
+RF_var_importance$Category <- cut(RF_var_importance$importance,
+                     breaks = c(0, medium_threshold, high_threshold, Inf),
+                     labels = c("Small", "Medium", "High"))
+
+# Create the plot
+ggplot(head(RF_var_importance, 25), aes(x = importance, y = reorder(Ens_id, importance), fill = Category)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("lightcoral", "lightgreen", "skyblue")) +  # Choose colors for each category
+  labs(title = "Top 25 Variable Importance Plot RF", x = "Importance", y = "Variable")+
+  theme_classic() +
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.y = element_blank(),
+        plot.title = element_text(size = 15),
+        legend.position = "right",
+        panel.grid.major.y = element_line(color = "grey", linetype = "dashed")) +
+  guides(fill = guide_legend(reverse = T, title.position = "top"))
+
+# Make predictions
+RF_results <- data.frame(predict(extract_workflow(rf_fit), new_data = Unkown_data))
+rownames(RF_results) <- rownames(Unkown_data)
+
+
+#write.csv(RF_results,"RF_tuned_results.csv", row.names = T)
+#write.csv(RF_var_importance,"RF_tuned_importance.csv", row.names = T)
+# mtry <- 69	min_n <- 2	loss <- 9.019757e-08
+#write.csv(metrics_df,"RF_tuned_metrics.csv", row.names = T)
+# View the results
+RF_results
+
+#rm(predictions,confusion,high_threshold,medium_threshold)
+
+```
+
+```{r Class importance}
+
+rf_tree <- extract_fit_engine(rf_fit)
+
+B_importance<- data.frame(B_importance = colMeans(rf_tree$variable.importance.local[my_data_train$Cell_type == "B", ])) %>%
+  mutate(ID = rownames(.))
+PreB_importance <- data.frame(PreB_importance = colMeans(rf_tree$variable.importance.local[my_data_train$Cell_type == "PreB", ]))%>%
+  mutate(ID = rownames(.))
+T_importance<- data.frame(T_importance = colMeans(rf_tree$variable.importance.local[my_data_train$Cell_type == "T", ])) %>%
+  mutate(ID = rownames(.))
+PreT_importance <- data.frame(PreT_importance = colMeans(rf_tree$variable.importance.local[my_data_train$Cell_type == "PreT", ]))%>%
+  mutate(ID = rownames(.))
+
+#negative importance, in this case, means that removing a given feature from the model actually improves the performance
+merged_df <- B_importance %>%
+  left_join(PreB_importance, by = "ID") %>%
+  left_join(T_importance, by = "ID") %>%
+  left_join(PreT_importance, by = "ID") %>%
+  select(-ID, everything(), ID)
+rownames(merged_df) <- merged_df$ID
+
+imp_gene_names <- gconvert(query = merged_df$ID, organism = "hsapiens", 
+         target="ENSG", mthreshold = Inf, filter_na = TRUE)
+
+merged_df$ID <- imp_gene_names$name
+merged_df$description <- imp_gene_names$description
+merged_df$ensembl_id <- rownames(merged_df)
+
+# Load the data frame
+DEGs_HS_metrics <- read.csv("C:/Users/perso/Desktop/Acute_Lymphoid_Leukemia_Project-main/data/Datasets/Post_manipulation/DEGs_HS_metrics.csv")
+
+# Set row names to the first column and remove the first column
+rownames(DEGs_HS_metrics) <- DEGs_HS_metrics$X
+DEGs_HS_metrics$X <- NULL
+
+# Subset the data frame based on the vector of gene names
+subset_df <- filter(DEGs_HS_metrics, ensembl_id %in% rownames(merged_df))
+
+merged_df <- merged_df %>%
+  left_join(subset_df, by = "ensembl_id")
+rownames(merged_df) <- merged_df$ID
+
+write.csv(merged_df, "Imp_by_Subtype.csv", row.names = T)
+
+```
+
+
+
+## K-Nearest Neighbors (KNN) Model:
+
+```{r KKNN with CV}
+set.seed(1234)
+
+# Define the model specification with the engine
+Knn_spec <- nearest_neighbor(weight_func = "optimal",
+              dist_power = tune(),
+              neighbors = 26) %>% #14	0.2425053
+  set_mode("classification") %>%
+  set_engine("kknn", num.threads = 10)
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(Knn_spec) %>%
+  finalize(train_data)
+
+# Define the search grid for tuning
+Knn_grid <- grid_latin_hypercube(draft,size = 15)
+
+# Create the tuning workflow
+tuned_knn_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(Knn_spec) 
+
+tune_1 <- tune_grid(tuned_knn_workflow,resamples = cv_folds, grid = Knn_grid)
+
+tune_2 <- tune_sim_anneal(tuned_knn_workflow,resamples = cv_folds, iter = 30, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_2, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_2 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+Knn_model_final <- finalize_model(x = Knn_spec, parameters = best_params)
+
+# Fit the model
+Knn_fit <- Knn_model_final %>%
+  last_fit(recipe,split = data_split)
+```
+
+```{r plots for KKNN}
+# Extract predictions
+predictions <- extract_workflow(Knn_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(Cell_type = test_data$Cell_type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = Cell_type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap KNN")
+
+# Make predictions
+KNN_results <- data.frame(predict(extract_workflow(Knn_fit), new_data = Unkown_data))
+rownames(KNN_results) <- rownames(Unkown_data)
+
+write.csv(KNN_results, "KNN_results.csv", row.names = T)
+write.csv(metrics_df, "KNN_tuned_metrics.csv", row.names = T)
+
+# View the results
+KNN_results
+```
+
+# XGBoost (Extreme Gradient Boosting):
+
+```{r Use xgb with CV}
+set.seed(1234)
+# Define the model specification with the ranger engine
+xgb_spec <- boost_tree(mtry = tune(),#24,
+                       trees = 500,#500, 
+                       min_n = tune(),#3,
+                       tree_depth = tune(),
+                       #learn_rate = tune(),
+                       loss_reduction = tune(),
+                       sample_size = 0.9
+                       ) %>% #0.9
+  set_engine("xgboost",nthread = 10, objective = "multi:softprob") %>% #, num_class = "4"
+  set_mode("classification") #%>% 
+  #translate()
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(xgb_spec) %>%
+  finalize(train_data)
+
+# Define the search grid for tuning
+xgb_grid <- grid_latin_hypercube(draft,size = 15)
+
+# Create the tuning workflow
+tuned_xgb_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(xgb_spec)
+
+tune_1 <- tune_grid(tuned_xgb_workflow,resamples = cv_folds, grid = xgb_grid)
+
+tune_2 <- tune_sim_anneal(tuned_xgb_workflow, resamples = cv_folds, iter = 25, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_2, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune2 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+xgb_model_final <- finalize_model(x = xgb_spec, parameters = best_params)
+
+# Fit the model
+xgb_fit <- xgb_model_final %>%
+  last_fit(recipe,split = data_split)
+extract_workflow(xgb_fit)
+```
+
+
+```{r plot xgb }
+set.seed(1234)
+# Extract predictions
+predictions <- extract_workflow(xgb_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(Cell_type = test_data$Cell_type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = Cell_type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+conf_matrix_data <- data.frame(confusion[["table"]])
+ggplot(conf_matrix_data, aes(x = Truth, y = Prediction, fill = Freq)) +
+  geom_tile() 
+  geom_text(aes(label = sprintf("%d", Freq))) +
+  scale_fill_gradient(low = "white", high = "lightcoral") +
+  theme_minimal() +
+  labs(x = "Predicted", y = "Truth", fill = "Frequency", title = "Confusion Matrix - Heatmap XGB")+
+  theme(legend.position = "none")
+
+xgb_tree <- extract_fit_engine(xgb_fit)
+# Plot xgb
+#xgb.plot.tree(model = xgb_tree,show_node_id = T)
+# plot importance
+importance_matrix <- xgb.importance(model = xgb_tree )
+print(importance_matrix)
+
+# Convert to gene names
+imp_gene_names <- gconvert(query = importance_matrix$Feature, organism = "hsapiens", 
+         target="ENSG", mthreshold = Inf, filter_na = TRUE)
+
+importance_matrix$Feature <- imp_gene_names$name
+importance_matrix$description <- imp_gene_names$description
+#write.csv(importance_matrix, "importance_matrix_xgb.csv", row.names = T)
+# Plot the importance
+xgb.ggplot.importance(importance_matrix = importance_matrix, top_n = 25, n_clusters = 4,rel_to_first = F) + 
+  ggtitle("Feature Importance XGBoost")
+
+# Make predictions
+XGB_results <- data.frame(predict(extract_workflow(xgb_fit), new_data = Unkown_data))
+rownames(XGB_results) <- rownames(Unkown_data)
+# Save results
+write.csv(XGB_results,"XGB_tuned_results.csv", row.names = T)
+write.csv(importance_matrix,"XGB_tuned_importance_matrix.csv", row.names = T)
+# mtry <- 69	min_n <- 2	loss <- 9.019757e-08
+write.csv(metrics_df,"XGB_tuned_metrics.csv", row.names = T)
+
+# View the results
+XGB_results
+
+```
+
+
+# Neural Network 
+```{r Neural Network }
+set.seed(1234)
+# Define the model specification with the ranger engine
+mlp_spec <- 
+  mlp(hidden_units = 9,
+      penalty = tune(),#0.456578483,#0.19371805
+      epochs = 500) %>%
+  set_mode("classification") %>%
+  set_engine("nnet",MaxNWts = 1000)
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(mlp_spec) %>%
+  finalize(train_data)
+# Define the search grid for tuning
+mlp_grid <- grid_latin_hypercube(draft,size = 15)
+
+# Create the tuning workflow
+tuned_mlp_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(mlp_spec)
+
+tune1 <- tune_grid(tuned_mlp_workflow,resamples = cv_folds, grid = mlp_grid)
+
+tune2 <- tune_sim_anneal(tuned_mlp_workflow, resamples = cv_folds, iter = 25, initial = tune1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune2, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune2 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+mlp_model_final <- finalize_model(x = mlp_spec, parameters = best_params)
+
+# Fit the model
+mlp_fit <- mlp_model_final %>%
+  last_fit(recipe,split = data_split)
+extract_workflow(mlp_fit)
+```
+
+```{r}
+set.seed(1234)
+# Extract predictions
+predictions <- extract_workflow(mlp_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(Cell_type = test_data$Cell_type)
+library("NeuralNetTools")
+nnet_model <- extract_fit_engine(mlp_fit)
+
+# Plot the neural network
+plotnet(nnet_model)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = Cell_type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap nnet")
+
+# Make predictions
+mlp_results <- data.frame(predict(extract_workflow(mlp_fit), new_data = Unkown_data))
+rownames(mlp_results) <- rownames(Unkown_data)
+
+write.csv(mlp_results, "Mlp_results.csv", row.names = T)
+write.csv(metrics_df, "Mlp_tuned_metrics.csv", row.names = T)
+
+
+# View the results
+mlp_results
+```
+
+# REAL MLP
+```{r TORCH data prep.}
+#torch::torch_set_num_threads(10)
+#torch::torch_set_num_interop_threads(10)
+# 1.Split our data between train and test
+
+# 2. Convert our input data to matrices and labels to vectors.
+x_train = data.matrix(train_data[,-ncol(train_data)])
+y_train = as.numeric(train_data$Cell_type)
+x_test = data.matrix(test_data[,-ncol(test_data)])
+y_test = as.numeric(test_data$Cell_type)
+
+# 3. Convert our input data and labels into tensors.
+x_train = torch_tensor(x_train, dtype = torch_float())$cuda()
+y_train = torch_tensor(y_train, dtype = torch_long())$cuda()
+x_test = torch_tensor(x_test, dtype = torch_float())$cuda()
+y_test = torch_tensor(y_test, dtype = torch_long())$cuda()
+
+epochs <- 500
+```
+
+```{r}
+"# Define your neural network architecture
+model <- nn_sequential(
+  nn_linear(97, 32),
+  nn_relu(),
+  nn_dropout(p=0.5),
+  nn_linear(32, 16),
+  nn_elu(),
+  nn_linear(16, 4)
+)"
+
+
+# Move model to CUDA
+#model <- model$cuda()
+
+
+# Define training parameters
+lr_values <- c(0.001, 0.01, 0.1)
+dropout_values <- c(0.5, 0.7, 0.9)
+
+# Grid search
+best_accuracy <- 0
+best_lr <- 0
+best_dropout <- 0
+
+for (lr in lr_values) {
+  for (dropout in dropout_values) {
+    # Define the model architecture with current hyper parameters
+    model <- nn_sequential(
+      nn_linear(97, 97),
+      nn_relu(),
+      nn_dropout(p=0.7),
+      nn_linear(97, 32),
+      nn_dropout(p=dropout),
+      nn_elu(),
+      nn_linear(32, 16),
+      nn_elu(),
+      nn_linear(16, 4),
+      nn_log_softmax(dim = 2)
+    )
+    
+    # Move model to CUDA
+    model <- model$cuda()
+    
+    # Define cost function and optimizer with L2 regularization
+    criterion <- nn_cross_entropy_loss()
+    optimizer <- optim_adam(model$parameters, lr = lr, weight_decay = 1e-5)
+    
+    # Training loop
+    for (epoch in 1:epochs) {
+      optimizer$zero_grad()
+      y_pred <- model(x_train)
+      loss <- criterion(y_pred, y_train)
+      loss$backward()
+      optimizer$step()
+      
+      # Calculate accuracy on validation data
+      predictions <- model(x_test)
+      winners <- torch_argmax(predictions, dim = 2) + 1
+      corrects <- (winners == y_test)
+      accuracy <- corrects$sum()$item() / y_test$size()
+      
+      # Update best hyperparameters if accuracy improves
+      if (accuracy > best_accuracy) {
+        best_accuracy <- accuracy
+        best_lr <- lr
+        best_dropout <- dropout
+      }
+      
+      # Print training progress
+      if (epoch %% 10 == 0) {
+        cat("Epoch:", epoch, "Loss:", loss$item(), "Accuracy:", accuracy, "\n")
+      }
+    }
+  }
+}
+
+# Print best hyperparameters
+cat("Best Learning Rate:", best_lr, "\n")
+cat("Best Dropout Rate:", best_dropout, "\n")
+cat("Best Validation Accuracy:", best_accuracy, "\n")
+
+
+```
+
+```{r}
+# Define training parameters
+epochs <- 100
+lr <- 0.01  # Adjust the learning rate as needed
+momentum <- 0.9  # Momentum parameter for SGD
+
+# Create the model
+model <- nn_sequential(
+  nn_linear(97, 32),
+  nn_relu(),
+  nn_dropout(p=0.5),
+  nn_linear(32, 8),
+  nn_elu(),
+  nn_linear(8, 4)
+)
+
+# Move the model to CUDA
+model <- model$cuda()
+
+# Define the loss function and optimizer
+criterion <- nn_cross_entropy_loss()
+optimizer <- optim_sgd(model$parameters, lr = lr, momentum = momentum)
+
+# Training loop
+for (epoch in 1:epochs) {
+  optimizer$zero_grad()
+  y_pred <- model(x_train)
+  loss <- criterion(y_pred, y_train)
+  loss$backward()
+  optimizer$step()
+  
+  # Calculate accuracy on validation data
+  predictions <- model(x_test)
+  winners <- torch_argmax(predictions, dim = 2) + 1
+  corrects <- (winners == y_test)
+  accuracy <- corrects$sum()$item() / y_test$size()
+  
+  # Print training progress
+  if (epoch %% 10 == 0) {
+    cat("Epoch:", epoch, "Loss:", loss$item(), "Accuracy:", accuracy, "\n")
+  }
+}
+
+```
+
+
+# Stop cluster
+```{r Stop parallel}
+parallel::stopCluster(cl)
+rm(cl)
+```
