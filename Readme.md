@@ -109,9 +109,9 @@ We developed a consensus classifier capable of accurately associating unknown da
 
 ### Key Genes Identified
 Among the human-specific genes with high importance in our models, we identified:
-- **EBF1:** A gene related to signal transduction in leukemia.
-- **MYO7B:** A known proto-oncogenic driver.
-- **RAB6C:** A member of the RAS oncogene family.
+- **[EBF1](https://www.genecards.org/cgi-bin/carddisp.pl?gene=EBF1):** A gene related to signal transduction in leukemia.
+- **[MYO7B](https://www.genecards.org/cgi-bin/carddisp.pl?gene=MYO7B&keywords=MYO7B):** A known proto-oncogenic driver.
+- **[RAB6C](https://www.genecards.org/cgi-bin/carddisp.pl?gene=RAB6C&keywords=RAB6C):** A member of the RAS oncogene family.
 
 ### Conclusion
 This study successfully highlights a set of human-specific genes associated with ALL, providing a basis for patient characterization by age and subtype. The developed classifier effectively predicts tumor subtypes in unknown samples, demonstrating high accuracy. Identifying significant human-specific genes offers potential biomarkers for ALL subtypes, aiding in targeted therapies and personalized medicine approaches.
