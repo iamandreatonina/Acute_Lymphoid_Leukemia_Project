@@ -116,7 +116,9 @@ Among the human-specific genes with high importance in our models, we identified
 ### Conclusion
 This study successfully highlights a set of human-specific genes associated with ALL, providing a basis for patient characterization by age and subtype. The developed classifier effectively predicts tumor subtypes in unknown samples, demonstrating high accuracy. Identifying significant human-specific genes offers potential biomarkers for ALL subtypes, aiding in targeted therapies and personalized medicine approaches.
 
-More to come, we keep to improve and refine the existing pipilene whie aiming for more analysis (`work in progress`)
+We are committed to continuous improvement and refinement of our existing pipeline. 
+Additionally, we are working diligently to expand our analytical capabilities. 
+Stay tuned for more updates as we progress. (`work in progress`)
 
 ## Repository Contents
 - **[data](data):** Includes the study's expression profiles and associated metadata.
