@@ -51,7 +51,7 @@ Project developed by:
 | GSE133499  | Both                        | All                       | 42             | 0               | 42             | Pediatric       |
 | GSE181157  | Both                        | All                       | 173            | 0               | 173            | Pediatric       |
 | GSE227832  | Both                        | All                       | 340            | 10              | 330            | Pediatric       |
-| Cohort_7_8 | Unknown                     | All                       | 107            | 0               | 107            | Both            |
+| Cohort_7_8 | Unknown                     | All                       | 108            | 0               | 108            | Both            |
 | GSE139073  | Bone                        | Bone marrow stromal cells | 40             | 40              | 0              | Adult           |
 | GSE162562  | Blood                       | All                       | 5              | 5               | 0              | Unknown         |
 | GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
