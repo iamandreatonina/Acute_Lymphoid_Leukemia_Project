@@ -54,7 +54,7 @@ Project developed by:
 | Cohort_7_8 | Unknown                     | All                       | 108            | 0               | 108            | Both            |
 | GSE139073  | Bone                        | Bone marrow stromal cells | 40             | 40              | 0              | Adult           |
 | GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
-| GSE228632  | Bone Marrow                 |                           | 65             | 0               | 65             | Pediatric       |
+| GSE228632  | Bone Marrow                 | Bone marrow mononuclear cells: mixed population of single nucleus cells including monocytes, lymphocytes, and hematopoietic stem and progenitor cells                        | 65             | 0               | 65             | Pediatric       |
 ## Overview
 This project investigates the role of human-specific genes in Acute Lymphoblastic Leukemia (ALL). By leveraging advanced quantitative methodologies, we aim to extend the current understanding of these genes and their association with ALL. This repository contains all relevant data, methods, and tools used in our study.
 
