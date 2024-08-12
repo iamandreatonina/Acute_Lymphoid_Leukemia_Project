@@ -51,7 +51,7 @@ Project developed by:
 | GSE133499  | Both                        | All                       | 42             | 0               | 38             | Pediatric       |
 | GSE181157  | Both                        | All                       | 173            | 0               | 173            | Pediatric       |
 | GSE227832  | Both                        | All                       | 331 (with double for some samples 340)            | 10              | 321            | Both       |
-| Cohort_7_8 | Unknown                     | All                       | 108            | 0               | 108            | Both            |
+| (Cohort_7_8)[https://www.pnas.org/doi/10.1073/pnas.2120787119#supplementary-materials] | Unknown                     | All                       | 108            | 0               | 108            | Both            |
 | GSE139073  | Bone                        | Bone marrow stromal cells | 40             | 40              | 0              | Adult           |
 | GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
 | GSE228632  | Bone Marrow                 | Bone marrow mononuclear cells: mixed population of single nucleus cells including monocytes, lymphocytes, and hematopoietic stem and progenitor cells                        | 65             | 0               | 65             | Pediatric       |
