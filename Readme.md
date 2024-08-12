@@ -48,14 +48,13 @@ Project developed by:
 | Dataset    | Origin_Bone_marrow_or_Blood | Cells                     | Number_Samples | N_Healty_sample | N_tumor_sample | Pediatric_Adult |
 |------------|-----------------------------|---------------------------|----------------|-----------------|----------------|-----------------|
 | GSE84445   | Blood                       | CD4_CD8_T                 | 20             | 20              | 0              | Unknown         |
-| GSE133499  | Both                        | All                       | 42             | 0               | 42             | Pediatric       |
+| GSE133499  | Both                        | All                       | 42             | 0               | 38             | Pediatric       |
 | GSE181157  | Both                        | All                       | 173            | 0               | 173            | Pediatric       |
-| GSE227832  | Both                        | All                       | 340            | 10              | 330            | Pediatric       |
+| GSE227832  | Both                        | All                       | 331 (with double for some samples 340)            | 10              | 321            | Pediatric       |
 | Cohort_7_8 | Unknown                     | All                       | 108            | 0               | 108            | Both            |
 | GSE139073  | Bone                        | Bone marrow stromal cells | 40             | 40              | 0              | Adult           |
-| GSE162562  | Blood                       | All                       | 5              | 5               | 0              | Unknown         |
 | GSE115736  | Blood                       | CD4_CD8_T, B              | 18             | 18              | 0              | Unknown         |
-
+| GSE228632  | Bone Marrow                 |                           | 65             | 0               | 65             | Pediatric       |
 ## Overview
 This project investigates the role of human-specific genes in Acute Lymphoblastic Leukemia (ALL). By leveraging advanced quantitative methodologies, we aim to extend the current understanding of these genes and their association with ALL. This repository contains all relevant data, methods, and tools used in our study.
 
