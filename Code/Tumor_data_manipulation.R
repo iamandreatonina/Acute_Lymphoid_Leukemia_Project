@@ -3,6 +3,7 @@ library(dplyr)
 library(biomaRt)
 library(edgeR)
 library(readxl)
+library(tidyverse)
 
 ##### Make a unique merged dataframe for GSE181157 ####
 
@@ -79,12 +80,12 @@ GSE133499 <- merge(GSE133499,convert_GSE133499,by.x="ensembl_gene_id",by.y="hgnc
 GSE133499[1]<- GSE133499[40]
 GSE133499 <- GSE133499 %>% dplyr::select(-ensembl_gene_id.y)
 
-####### Data manipulation T_all, 107 tumor samples, both pediatric and adults. ####
+####### Data manipulation T_all, 108 tumor samples, both pediatric and adults. ####
 
 T_all <- read.csv('T-ALL-RawCount-Cohort7_8.txt',sep= '\t',header = T)
 
 # create the ensembl object that points to the Hsapiens database
-ensembl<- biomaRt::useEnsembl(biomart = "ensembl",dataset = "hsapiens_gene_ensembl")
+# ensembl<- biomaRt::useEnsembl(biomart = "ensembl",dataset = "hsapiens_gene_ensembl")
 
 # retrieve the corresponding ensembl_gene_id from the hugo symbol of our dataset
 convert_T_all <- getBM(attributes=c("ensembl_gene_id","hgnc_symbol"),
@@ -123,10 +124,32 @@ GSE228632 <- read.table('GSE228632_RNAseq_read_counts.txt', sep = '\t',header = 
 #change colname of the genes
 colnames(GSE228632)[1] <- 'ensembl_gene_id' 
 
+
+##### Data manipulation Maspore, 377 samples all tumor samples, Bone marrow (BM) or peripheral blood (PB) , all pediatric ####
+
+Maspore <- read.table('MaSpore.RNASeq.Counts.csv',sep = ',',header = T)
+
+convert_Maspore <- getBM(attributes=c("ensembl_gene_id","hgnc_symbol"),
+                        filters="hgnc_symbol", 
+                        values=Maspore$X,
+                        mart = ensembl)
+Maspore <- merge(Maspore,convert_Maspore,by.x="X",by.y="hgnc_symbol")
+Maspore[1] <- Maspore[379]
+colnames(Maspore)[1] <- 'ensembl_gene_id' 
+Maspore <- Maspore %>% dplyr::select(-379)
+
+
 ##### Create a final dataframe with all the tumor data ####
-momentary_list <- list(GSE181157,GSE227832,GSE133499,T_all,GSE228632) 
+momentary_list <- list(GSE181157,GSE227832,GSE133499,T_all,GSE228632,Maspore) 
 final <- momentary_list %>%  reduce(full_join,by = 'ensembl_gene_id') %>% drop_na()
+
+#con Maspore siamo passati da 21377 geni in comune ad 20830 geni in comune 
+
 
 # create merged dataframe of all the data take into consideration 
 write.csv(final,file = '../Post_manipulation/Tumor_dataframe.csv',row.names = F)
+
+
+
+
  

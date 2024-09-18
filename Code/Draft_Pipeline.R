@@ -1,10 +1,10 @@
 # BiocManager::install('sva')
 library(sva)
-library(tidyverse)
+# library(tidyverse)
 library(dplyr)
 library(readxl)
 library(ggplot2)
-library(stringr)
+library(stringr) 
 library(magrittr)
 library(umap)
 library(edgeR)
@@ -25,9 +25,11 @@ library(plotly)
 
 `%nin%` <- Negate(`%in%`)
 
+# Set Session to source file location and then:
+
 setwd("../data/Datasets/Post_manipulation")
 
-# 88 controls and 705 tumor samples 
+# 88 controls and 705 tumor samples (now 1082)
 
 ##### Upload human specific genes and Data ####
 
@@ -46,7 +48,7 @@ duplicato2 <- Control$ensembl_gene_id[duplicated(Control$ensembl_gene_id)] # <- 
 # rowSums(sum[2:641]) # the first one is the most informative so we use distinct()
 Tumor <- distinct(Tumor,ensembl_gene_id,.keep_all =T )
 
-Tumor_2 <- as.matrix(sapply(Tumor[2:706], as.numeric))
+Tumor_2 <- as.matrix(sapply(Tumor[2:1083], as.numeric))
 Control_2 <- as.matrix(sapply(Control[2:89], as.numeric))
 
 PreCombat_control_df <- tidyr::gather(as.data.frame(Control_2),key = 'sample',value = 'read_number')
@@ -70,7 +72,7 @@ ggplot() +
 dev.off()
 
 #creation of batch for tumor and control, so creation of the vectors for batch separation, so check the data!!
-batch_tumor <- c(rep(1,173),rep(2,321),rep(3,38),rep(4,108),rep(5,65))
+batch_tumor <- c(rep(1,173),rep(2,321),rep(3,38),rep(4,108),rep(5,65),rep(6,377))
 batch_control <- c(rep(1,20),rep(2,10),rep(3,40), rep(4,18))
 
 # application of Combat-Seq and creation of adjusted dataframes 
@@ -88,12 +90,12 @@ tumor_adjusted <- add_column(tumor_adjusted, 'ensembl_gene_id' = Tumor$ensembl_g
 # We use TMM method , which is a normalization method intra and inter-sample and we create CPM matrices 
 
 # Let`s check how many human specific genes we have in our dataset
-HSgenes_tumor <- tumor_adjusted %>% dplyr::filter(tumor_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`) 
+HSgenes_tumor <- tumor_adjusted %>% dplyr::filter(tumor_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`)  
 HSgenes_control <- control_adjusted %>% dplyr::filter(control_adjusted$ensembl_gene_id %in% Human_genes$`Ensembl ID`) 
 
 # Previously the result is that of 873 human specific genes there are present 498 in control 
 # But after adding controls ans tumors samples ( 88 control total and 705 tumors total ) in control we have 478 and tumor 603 
-
+# After adding 377 tumor samples results: 478 controls and 598 tumors
 
 # We don't have a precise threshold to eliminate the low expressed genes, so we know that DESeq2 set a 
 #threshold based on the expression of our data by doing result()
@@ -114,7 +116,7 @@ ggplot() +
   scale_y_log10()
 dev.off()
 
-# in this case there are too many samples so we are gonging to plot 20 samples instead of 640 
+# in this case there are too many samples so we are gonging to plot 20 samples instead of 1083 
 jpeg(filename = '../images/tumor_Pre_TMM_boxplot_subset.jpeg')
 ggplot() +
   geom_boxplot(colour = 'darkred',fill = 'indianred',alpha = 0.5, mapping = aes(sample,read_number+1),data = Pre_tumor_df_subset, width = 0.5)+
@@ -175,8 +177,8 @@ rownames(info_sample_1)<-info_sample_1$sample
 info_sample_2<-as.data.frame(str_split(string=info_sample_1$sample, pattern="_", simplify=T)) #? serve? 
 colnames(info_sample_2)<-c("condition","replicate")
 info_samples<-cbind(info_sample_1, info_sample_2[1:2])
-info_samples$condition<-c(rep("H",88),rep("T",705)) # which are 88 healthy and 705 tumors 
-info_samples$replicate<-c(rep(1,793))
+info_samples$condition<-c(rep("H",88),rep("T",1082)) # which are 88 healthy and 705 tumors 
+info_samples$replicate<-c(rep(1,1170))
 
 
 # Eliminating the samples and control base on the median and tharshold 
@@ -240,7 +242,7 @@ edge_t <- glmQLFTest(edge_f,contrast=contro)
 # -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
 # -> we get the top 20 DE genes
 #  We sort for the fold change
-DEGs <- as.data.frame(topTags(edge_t,n=12976,p.value = 0.01,sort.by = "logFC"))
+DEGs <- as.data.frame(topTags(edge_t,n=12969,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -256,13 +258,23 @@ DEGs <- DEGs[order(DEGs$logFC, decreasing = T),] # we order based on the fold ch
 table(DEGs$class)
 # AFTER ADDING NEW DATA
 #  - 736   + 2161   = 7555
+
+#after adding the new 377 B-ALl samples 
+# -  706  + 2012   = 7528
   
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes
 
 DEGs_Hsgenes <- DEGs %>% dplyr::filter(rownames(DEGs) %in% Human_genes$`Ensembl ID`)
 Up_HSgenes <- DEGs[DEGs$class=='+',] %>% dplyr::filter(rownames(DEGs[DEGs$class=='+',]) %in% Human_genes$`Ensembl ID`) 
 Down_HSgenes <- DEGs[DEGs$class=='-',] %>% dplyr::filter(rownames(DEGs[DEGs$class=='-',]) %in% Human_genes$`Ensembl ID`) 
-# AFTER ADDING 12 down and 85 up HS DEGs
+
+table(DEGs_Hsgenes$class)
+# AFTER ADDING 12 - and 85 +  163 =HS DEGs
+
+#after adding the new 377 B-ALl samples 
+# -14   + 72  = 160
+     
+
 
 # Display the results using a volcano plot (x-axes: log FoldChange, y-axes: inverse function of the p-value).
 # We can see the most significant DEGs colored in green, which are genes that surpass a threshold set on both the p-value
@@ -294,11 +306,10 @@ dev.off()
 
 ############ heatmap all genes ####
 
-
-col <- rep('chartreuse4', 670)
+col <- rep('chartreuse4', 1170) # 1170 numebr of sampels 
 col[which(info_samples$condition == 'T')] <- 'burlywood3' 
 pal <- c('blue','white','red')
-pal <- colorRampPalette(pal)(670)
+pal <- colorRampPalette(pal)(1170) # 1170 numebr of sampels 
 DEGs_selected <- DEGs %>% dplyr::filter(DEGs$class != '=')
 jpeg(filename = '../images/Heatmap_plot_DEGs.jpeg')
 heatmap(as.matrix(cpm_table[which(rownames(cpm_table) %in% rownames(DEGs_selected)),]),ColSideColors = col, cexCol = 0.5,margins = c(4,4), col = pal, cexRow = 0.2)
@@ -321,10 +332,10 @@ dev.off()
 
 ############ heatmap human specific ####
 
-col <- rep('chartreuse4', 670)
+col <- rep('chartreuse4', 1170) # 1170 numebr of sampels 
 col[which(info_samples$condition == 'T')] <- 'burlywood3' 
 pal <- c('blue','white','red')
-pal <- colorRampPalette(pal)(670)
+pal <- colorRampPalette(pal)(1170) # 1170 numebr of sampels 
 DEGs_selected <- DEGs_Hsgenes %>% dplyr::filter(DEGs_Hsgenes$class != '=')
 jpeg(filename = '../images/Heatmap_plot_DEGsHS.jpeg')
 heatmap(as.matrix(cpm_table[which(rownames(cpm_table) %in% rownames(DEGs_selected)),]),ColSideColors = col, cexCol = 0.5,margins = c(4,4), col = pal, cexRow = 0.2)
@@ -340,36 +351,70 @@ dev.off()
 
 ##### PCA analysis ####
 Diff_expressed <- DEGs[which(DEGs$class != '='),]
-PCA_cpm_log_nonHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed)),]
-PCA_cpm_log <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)),]
+PCA_cpm_log_nonHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed)),] # all genes Diff expressed
+PCA_cpm_log <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs_selected)),] #only HS not diff expressed
+
+PCA_cpm_log_woHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed) & rownames(cpm_table_log) %nin% rownames(DEGs_selected)),] # Diff expressed genes without HS
 
 # # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
 PCA_cpm_log_filtered<-PCA_cpm_log[,which(apply(PCA_cpm_log, 2, var) != 0)]
 PCA_cpm_log_filtered<- PCA_cpm_log_filtered[which(apply(PCA_cpm_log_filtered, 1, var) != 0),]
-color<- c(rep('darkgreen',88),rep('indianred',705))
+color<- c(rep('darkgreen',88),rep('indianred',1082))
 
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[,which(apply(PCA_cpm_log_nonHS, 2, var) != 0)]
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[which(apply(PCA_cpm_log_nonHS, 1, var) != 0),]
 
+
+PCA_cpm_log_woHS_filtered <- PCA_cpm_log_woHS[,which(apply(PCA_cpm_log_woHS, 2, var) != 0)]
+PCA_cpm_log_woHS_filtered <- PCA_cpm_log_woHS[which(apply(PCA_cpm_log_woHS, 1, var) != 0),]
+
 #### PCA plot HS ####
-data.PC <- prcomp(t(PCA_cpm_log_filtered),scale. = T)
+data.PC_HS <- prcomp(t(PCA_cpm_log_filtered),scale. = T)
 jpeg(filename = '../images/PCA_plot_DEGs_log_HS.jpeg')
-plot(data.PC$x[,1:2],col=color,pch = 19) 
+plot(data.PC_HS$x[,1:2],col=color,pch = 19) 
 dev.off()
 
 #### PCA plot all genes####
-data.PC_nonHG <- prcomp(t(PCA_cpm_log_nonHS_filtered),scale. = T)
-plot(data.PC_nonHG$x[,1:2],col=color,pch = 19) 
+data.PC_nonHS <- prcomp(t(PCA_cpm_log_nonHS_filtered),scale. = T)
+plot(data.PC_nonHS$x[,1:2],col=color,pch = 19) 
 
-#### PCA plot of tumor only (useless) ####
-# both alll genes and only HS
-data.PC.tumor <- prcomp(t(PCA_cpm_log_filtered[89:793]),scale. = T )
-jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
-plot(data.PC.tumor$x[,1:2],pch = 19)
-dev.off()
+#### PCA without HS ####
+data.PC_woHS <- prcomp(t(PCA_cpm_log_woHS_filtered),scale. = T)
+plot(data.PC_woHS$x[,1:2],col=color,pch=19)
 
-data.PC_nonHG_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[89:793]),scale. = T )
-plot(data.PC_nonHG_tumor$x[,1:2],pch = 19)
+
+#### PCA plot of tumor only ####
+# only HS
+data.PC.tumor_HS <- prcomp(t(PCA_cpm_log_filtered[89:1170]),scale. = T )
+# jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
+plot(data.PC.tumor_HS$x[,1:2],pch = 19,col = c(rep('indianred',1082)))
+# dev.off()
+
+# all together 
+data.PC_nonHS_tumor <- prcomp(t(PCA_cpm_log_nonHS_filtered[89:1170]),scale. = T )
+plot(data.PC_nonHS_tumor$x[,1:2],pch = 19,col = c(rep('indianred',1082)))
+
+#without HS 
+data.PC_woHS_tumor <- prcomp(t(PCA_cpm_log_woHS_filtered[89:1170]),scale. = T )
+plot(data.PC_woHS_tumor$x[,1:2],pch=19, col = c(rep('indianred',1082)))
+
+
+#### PCA plot of control only ####
+
+# only HS
+data.PC.control_HS <- prcomp(t(PCA_cpm_log_filtered[1:88]),scale. = T )
+# jpeg(filename = '../images/PCA_plot_DEGs_log_tumor.jpeg')
+plot(data.PC.control_HS$x[,1:2],pch = 19, col= c(rep('darkgreen',88)))
+# dev.off()
+
+# all together 
+data.PC_nonHS_control <- prcomp(t(PCA_cpm_log_nonHS_filtered[1:88]),scale. = T )
+plot(data.PC_nonHS_control$x[,1:2],pch = 19,col= c(rep('darkgreen',88)))
+
+#without HS
+data.PC_woHS_control <- prcomp(t(PCA_cpm_log_woHS_filtered[1:88]),scale. = T )
+plot(data.PC_woHS_control$x[,1:2],col= c(rep('darkgreen',88)),pch=19)
+
 
 
 ##### Partitioning around medoids, need to also to install cmake ####
@@ -397,15 +442,14 @@ fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15,method =
 fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
 
 
-
 ##### Questi servono mi sa #######
 # PAM on control-tumor
-pam1<-eclust(data.PC$x, "pam", k=9)
-pam1_nonHS <- eclust(data.PC_nonHG$x,'pam',k=9)
+pam1<-eclust(data.PC_HS$x, "pam", k=9)
+pam1_nonHS <- eclust(data.PC_nonHS$x,'pam',k=9)
 
 # PAM tumors subtypes
-pam2<-eclust(data.PC.tumor$x, "pam", k=8)
-pam2_nonHS <- eclust(data.PC_nonHG_tumor$x,'pam',k=8)
+pam2<-eclust(data.PC.tumor_HS$x, "pam", k=8)
+pam2_nonHS <- eclust(data.PC_nonHS_tumor$x,'pam',k=8)
 
 
 ##### hierarchical clustering ####
@@ -475,31 +519,40 @@ fig2_nonHS
 
 
 ### Setting pediatric and adults 
+clusterino_pam2<-data.frame(data.PC.tumor)
 clusterino_pam2$type <- 'pediatric'
+clusterino_pam2$age <- 0
 metadataGSE181157<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
 metadataGSE181157$`DFCI ID`<- rownames(clusterino_pam2)[1:173]# HERE I KEEP PRE-B AND PRE-T TYPES!
 for (row in 1:dim(metadataGSE181157)[1]){
   Age <- metadataGSE181157$`Age at Dx (years)`[row]  
   if (Age<=18){
-    clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'pediatric'  } else{
-      clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'adult'  }
+    clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'pediatric'
+    clusterino_pam2$age[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- round(Age,2)} else{
+      clusterino_pam2$type[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- 'adult' 
+      clusterino_pam2$age[rownames(clusterino_pam2) == metadataGSE181157$`DFCI ID`[row]] <- round(Age,2)}
 }
 
 metadata_choort_7_8 <- readxl::read_xlsx('../Tumors/Metadata_choort_7_8.xlsx', skip=1)
 
 for (row in 1:dim(metadata_choort_7_8)[1]){  Age <- metadata_choort_7_8$`Age (year)`[row]
             if (Age=='Not available'){    
-              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'Unknown'} 
+              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'Unknown'
+              clusterino_pam2$age[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- -1} 
             else if (as.numeric(Age)<=18){    
-              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'pediatric'} 
+              clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'pediatric'
+              clusterino_pam2$age[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- as.numeric(Age)
+              } 
             else {
               clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'adult'
+              clusterino_pam2$age[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- as.numeric(Age)
 }}
 
 components2 <- as.data.frame(data.PC.tumor$x)
 components2<-cbind(components2, clusterino_pam2)
 components2$PC2 <- -components2$PC2
 fig3<-plot_ly(components2, x=~PC1, y=~PC2, color=clusterino_pam2$type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+
 fig3
 
 fig4<-plot_ly(components2, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$type,colors=c('darkred', 'blue4') ,mode='markers')
@@ -1690,7 +1743,6 @@ head(down_B_kegg,10)
 
 # --> No gene can be mapped....
 # --> Expected input gene ID: 1268,11245,539,7078,1349,64066
-# --> return NULL...
 
 ### Subtype T ####
 
@@ -1841,11 +1893,11 @@ umap_result6 <- umap(t(Age_cpm_log_only_HS_filtered),
                      n_components = 3
 )
 
-clusterino_umap_age <- clusterino_pam2$type
+clusterino_umap_age <- clusterino_pam2
 umap_df6 <- data.frame(umap_result6$layout,
-                       Cell_type = clusterino_umap_age)
+                       Cell_type = clusterino_umap_age$type, Age =clusterino_umap_age$age)
 
-colnames(umap_df6) <- c("umap_1","umap_2","umap_3", "Age")
+colnames(umap_df6) <- c("umap_1","umap_2","umap_3", "Age",'Years')
 rownames(umap_df6) <-  rownames(t(Age_cpm_log_only_HS_filtered))
 # Print UMAP
 print(umap_result6)
@@ -1857,10 +1909,10 @@ fig4U <- plot_ly(umap_df6,
                  color = umap_df6$Age,
                  colors = c("#003f5c","#bc5090","#ffa600"),   
                  mode = 'markers',
+                 text = paste0('Age: ',umap_df6$Years),
                  size=10) %>% layout(title = 'Pediatric-adults stratification HS, metric euclidian, neighbors = square')
-
 # Display the 3D scatter plot
-fig4U
+# fig4U <- fig4U %>% add_trace(x = ~umap_1, y = ~umap_2, z = ~umap_3, text = umap_df6$Years, showlegends = TRUE)
 
 #### UMAP DEGs pediatric-adult except HS  #### 
 
