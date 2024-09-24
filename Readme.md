@@ -47,7 +47,7 @@ Project developed by:
 ## Dataset
 | Dataset    | Origin_Bone_marrow_or_Blood | Cells                     | Number_Samples | N_Healty_sample | N_tumor_sample | Pediatric_Adult |
 |------------|-----------------------------|---------------------------|----------------|-----------------|----------------|-----------------|
-| [GSE84445](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84445)  | Blood                       | CD4_CD8_T                 | 20             | 10              | 0              | Unknown         |
+| [GSE84445](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE84445)  | Blood                       | CD4_CD8_T                 | 20             | 10              | 0              | Adults         |
 | [GSE133499](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE133499)  | Both                        | All                       | 42             | 0               | 38             | Pediatric       |
 | [GSE181157](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE181157)  | Both                        | All                       | 173            | 0               | 173            | Pediatric       |
 | [GSE227832](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE227832)  | Both                        | All                       | 331 (with double for some samples 340)            | 10              | 321            | Both       |
