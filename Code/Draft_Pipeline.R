@@ -20,12 +20,13 @@ library(biomaRt)
 library(org.Hs.eg.db)
 library(tibble)
 library(plotly)
-
+# library(rstudioapi)
 
 
 `%nin%` <- Negate(`%in%`)
 
 # Set Session to source file location and then:
+setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 
 setwd("../data/Datasets/Post_manipulation")
 
@@ -421,91 +422,92 @@ plot(data.PC_woHS_control$x[,1:2],col= c(rep('darkgreen',88)),pch=19)
 
 #### I SEGUENTI SERVONO?####
 
-# for control-tumor -> 2 clusters as seen from graphs under
-fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10)
-fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10,method = 'gap_stat')+ theme_classic()
-fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10, method = "wss")
-
-# For subtypes of tumors
-fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15)
-fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15,method = 'gap_stat')+ theme_classic()
-fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
-
-# for control-tumor -> 2 clusters as seen from graphs under no HS
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10)
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10,method = 'gap_stat')+ theme_classic()
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10, method = "wss")
-
-# For subtypes of tumors no HS
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15)
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15,method = 'gap_stat')+ theme_classic()
-fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
+# # for control-tumor -> 2 clusters as seen from graphs under
+# fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10)
+# fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10,method = 'gap_stat')+ theme_classic()
+# fviz_nbclust(data.PC$x,FUNcluster = cluster::pam,k.max = 10, method = "wss")
+# 
+# # For subtypes of tumors
+# fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15)
+# fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15,method = 'gap_stat')+ theme_classic()
+# fviz_nbclust(data.PC.tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
+# 
+# # for control-tumor -> 2 clusters as seen from graphs under no HS
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10)
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10,method = 'gap_stat')+ theme_classic()
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 10, method = "wss")
+# 
+# # For subtypes of tumors no HS
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15)
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15,method = 'gap_stat')+ theme_classic()
+# fviz_nbclust(data.PC_nonHG_tumor$x,FUNcluster = cluster::pam,k.max = 15, method = "wss")
 
 
 ##### Questi servono mi sa #######
-# PAM on control-tumor
-pam1<-eclust(data.PC_HS$x, "pam", k=9)
-pam1_nonHS <- eclust(data.PC_nonHS$x,'pam',k=9)
-
-# PAM tumors subtypes
-pam2<-eclust(data.PC.tumor_HS$x, "pam", k=8)
-pam2_nonHS <- eclust(data.PC_nonHS_tumor$x,'pam',k=8)
-
-
-##### hierarchical clustering ####
-#fanno schifo  
-
-#calculate distances between observations and create a simple dendogram
-dm <- dist(data.PC$x)
-hc <- hclust(dm,method = 'average')
-plot(hc,hang =-1)
-rect.hclust(hc,k=2,border = 'red')
-clust.vec.2<-cutree(hc,k=2)
-fviz_cluster(list(data=data.PC$x, cluster=clust.vec.2))
-
-# same for tumor subtypes
-dm2 <- dist(data.PC.tumor$x)
-hc2 <- hclust(dm2,method = 'average')
-plot(hc2,hang =-1)
-rect.hclust(hc2,k=2,border = 'red')
-clust.vec<-cutree(hc2,k=8)
-fviz_cluster(list(data=data.PC.tumor$x, cluster=clust.vec))
-
-# clusters <- mutate(cpm_table_log[31:670],cluster =clust.vec
-
-clusterino_pam2<-as.data.frame((pam2$clustering))
-components<-data.PC.tumor[["x"]]
-components<-data.frame(components)
-components<-cbind(components, clusterino_pam2)
-components$PC2<- -components$PC2
-
-components$`(pam2$clustering)` <- as.factor(components$`(pam2$clustering)`)
-
-fig<-plot_ly(components, x=~PC1, y=~PC2, color=clusterino_pam2$`(pam2$clustering)`,colors=c('cadetblue1', 'red', 'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
-# layout(legend = list(title = list(text = 'color')))
-fig
-
-
-fig2<-plot_ly(components, x=~PC1, y=~PC2, z=~PC3,color=components$`(pam2$clustering)`,colors=brewer.pal(n = 8, name = "RdBu") ,mode='markers',marker = list(size = 4)) #  %>%
-fig2
-
-
-clusterino_pam2_nonHS<-as.data.frame((pam2_nonHS$clustering))
-components_nonHS<-data.PC_nonHG_tumor$x
+# # PAM on control-tumor
+# # pam1<-eclust(data.PC_HS$x, "pam", k=9)
+# pam1_nonHS <- eclust(data.PC_nonHS$x,'pam',k=9)
+# 
+# # PAM tumors subtypes
+# pam2<-eclust(data.PC.tumor_HS$x, "pam", k=8)
+# pam2_nonHS <- eclust(data.PC_nonHS_tumor$x,'pam',k=8)
+# 
+# 
+# ##### hierarchical clustering ####
+# #fanno schifo  
+# 
+# #calculate distances between observations and create a simple dendogram
+# # dm <- dist(data.PC$x)
+# # hc <- hclust(dm,method = 'average')
+# # plot(hc,hang =-1)
+# # rect.hclust(hc,k=2,border = 'red')
+# # clust.vec.2<-cutree(hc,k=2)
+# # fviz_cluster(list(data=data.PC$x, cluster=clust.vec.2))
+# # 
+# # # same for tumor subtypes
+# # dm2 <- dist(data.PC.tumor$x)
+# # hc2 <- hclust(dm2,method = 'average')
+# # plot(hc2,hang =-1)
+# # rect.hclust(hc2,k=2,border = 'red')
+# # clust.vec<-cutree(hc2,k=8)
+# # fviz_cluster(list(data=data.PC.tumor$x, cluster=clust.vec))
+# # 
+# # # clusters <- mutate(cpm_table_log[31:670],cluster =clust.vec
+# 
+# clusterino_pam2<-as.data.frame((pam2$clustering))
+# components<-data.PC.tumor_HS[["x"]]
 # components<-data.frame(components)
-components_nonHS<-cbind(components_nonHS, clusterino_pam2_nonHS)
-components_nonHS$PC2<- -components_nonHS$PC2
-components_nonHS$`(pam2_nonHS$clustering)`<- as.factor(components_nonHS$`(pam2_nonHS$clustering)`)
-
-
-fig_nonHS<-plot_ly(components_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$`(pam2_nonHS$clustering)`,colors=c('cadetblue1', 'red', 
-                                                                                            'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
-# layout(legend = list(title = list(text = 'color')))
-
-fig_nonHS
-
-fig2_nonHS<-plot_ly(components_nonHS, x=~PC1, y=~PC2, z=~PC3, color =components_nonHS$`(pam2_nonHS$clustering)`, colors=brewer.pal(n = 8, name = "RdBu") ,mode='markers',marker = list(size = 4)) #  %>%
-fig2_nonHS
+# components<-cbind(components, clusterino_pam2)
+# components$PC2<- -components$PC2 # non capisco perchè mettiam positivo pc2
+# 
+# 
+# components$`(pam2$clustering)` <- as.factor(components$`(pam2$clustering)`)
+# 
+# fig<-plot_ly(components, x=~PC1, y=~PC2, color=clusterino_pam2$`(pam2$clustering)`,colors=c('cadetblue1', 'red', 'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
+# # layout(legend = list(title = list(text = 'color')))
+# fig
+# # 
+# 
+# fig2<-plot_ly(components, x=~PC1, y=~PC2, z=~PC3,color=components$`(pam2$clustering)`,colors=brewer.pal(n = 8, name = "RdBu") ,mode='markers',marker = list(size = 4)) #  %>%
+# fig2
+# 
+# 
+# clusterino_pam2_nonHS<-as.data.frame((pam2_nonHS$clustering))
+# components_nonHS<-data.PC_nonHS_tumor$x
+# # components<-data.frame(components)
+# components_nonHS<-cbind(components_nonHS, clusterino_pam2_nonHS)
+# components_nonHS$PC2<- -components_nonHS$PC2
+# components_nonHS$`(pam2_nonHS$clustering)`<- as.factor(components_nonHS$`(pam2_nonHS$clustering)`)
+# 
+# 
+# fig_nonHS<-plot_ly(components_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$`(pam2_nonHS$clustering)`,colors=c('cadetblue1', 'red', 
+#                                                                                             'chartreuse3','blueviolet','blue4','darkgoldenrod2','darksalmon','seagreen4') ,type='scatter',mode='markers') #  %>%
+# # layout(legend = list(title = list(text = 'color')))
+# 
+# fig_nonHS
+# 
+# fig2_nonHS<-plot_ly(components_nonHS, x=~PC1, y=~PC2, z=~PC3, color =components_nonHS$`(pam2_nonHS$clustering)`, colors=brewer.pal(n = 8, name = "RdBu") ,mode='markers',marker = list(size = 4)) #  %>%
+# fig2_nonHS
 # layout(legend = list(title = list(text = 'color')))
 
 # GSE181157, 173 pediatric tumor samples
@@ -519,7 +521,15 @@ fig2_nonHS
 
 
 ### Setting pediatric and adults 
-clusterino_pam2<-data.frame(data.PC.tumor)
+# clusterino_pam2<-data.frame(data.PC.tumor_HS)
+
+
+''' Allora si può mettere la stesso tipo di dataframe come usando dati pca$x gia presenti, 
+l unica cosa è cambiare il vaore di pC2 a positivo, però non capisco il motivo, per averlo più comodo nel plot??  '''
+
+
+clusterino_pam2 <- as.data.frame(data.PC.tumor_HS$x)
+clusterino_pam2$PC2 <- - clusterino_pam2$PC2
 clusterino_pam2$type <- 'pediatric'
 clusterino_pam2$age <- 0
 metadataGSE181157<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
@@ -547,6 +557,11 @@ for (row in 1:dim(metadata_choort_7_8)[1]){  Age <- metadata_choort_7_8$`Age (ye
               clusterino_pam2$type[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- 'adult'
               clusterino_pam2$age[rownames(clusterino_pam2) == metadata_choort_7_8$ID[row]] <- as.numeric(Age)
 }}
+
+
+
+
+
 
 components2 <- as.data.frame(data.PC.tumor$x)
 components2<-cbind(components2, clusterino_pam2)
