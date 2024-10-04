@@ -1,0 +1,14 @@
+"",".metric",".estimator",".estimate"
+"1","accuracy","multiclass",0.961165048543689
+"2","kap","multiclass",0.937010281695524
+"3","sens","macro",0.959490484109387
+"4","spec","macro",0.983210322445561
+"5","ppv","macro",0.914035087719298
+"6","npv","macro",0.986619885063163
+"7","mcc","multiclass",0.937997187206634
+"8","j_index","macro",0.942700806554948
+"9","bal_accuracy","macro",0.971350403277474
+"10","detection_prevalence","macro",0.25
+"11","precision","macro",0.914035087719298
+"12","recall","macro",0.959490484109387
+"13","f_meas","macro",0.929199660633484
