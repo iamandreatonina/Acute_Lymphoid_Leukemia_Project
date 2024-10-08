@@ -20,10 +20,9 @@ library(biomaRt)
 library(org.Hs.eg.db)
 library(tibble)
 library(plotly)
-# library(rstudioapi)
+library(rstudioapi)
 
 
-`%nin%` <- Negate(`%in%`)
 
 # Set Session to source file location and then:
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
@@ -31,6 +30,8 @@ setwd(dirname(rstudioapi::getSourceEditorContext()$path))
 setwd("../data/Datasets/Post_manipulation")
 
 # 88 controls and 705 tumor samples (now 1082)
+
+`%nin%` <- Negate(`%in%`)
 
 ##### Upload human specific genes and Data ####
 
@@ -257,9 +258,6 @@ DEGs$class[which(DEGs$logCPM > 1 & DEGs$logFC < (-1.5))] = '-'
 DEGs <- DEGs[order(DEGs$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs$class)
-# AFTER ADDING NEW DATA
-#  - 736   + 2161   = 7555
-
 #after adding the new 377 B-ALl samples 
 # -  706  + 2012   = 7528
   
@@ -270,13 +268,9 @@ Up_HSgenes <- DEGs[DEGs$class=='+',] %>% dplyr::filter(rownames(DEGs[DEGs$class=
 Down_HSgenes <- DEGs[DEGs$class=='-',] %>% dplyr::filter(rownames(DEGs[DEGs$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_Hsgenes$class)
-# AFTER ADDING 12 - and 85 +  163 =HS DEGs
-
 #after adding the new 377 B-ALl samples 
 # -14   + 72  = 160
      
-
-
 # Display the results using a volcano plot (x-axes: log FoldChange, y-axes: inverse function of the p-value).
 # We can see the most significant DEGs colored in green, which are genes that surpass a threshold set on both the p-value
 # and the Fold Change.
@@ -349,7 +343,6 @@ heatmap(as.matrix(cpm_table_log[which(rownames(cpm_table_log) %in% rownames(DEGs
 dev.off()
 
 
-
 ##### PCA analysis ####
 Diff_expressed <- DEGs[which(DEGs$class != '='),]
 PCA_cpm_log_nonHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Diff_expressed)),] # all genes Diff expressed
@@ -361,23 +354,29 @@ PCA_cpm_log_woHS <- cpm_table_log[which(rownames(cpm_table_log) %in% rownames(Di
 PCA_cpm_log_filtered<-PCA_cpm_log[,which(apply(PCA_cpm_log, 2, var) != 0)]
 PCA_cpm_log_filtered<- PCA_cpm_log_filtered[which(apply(PCA_cpm_log_filtered, 1, var) != 0),]
 color<- c(rep('darkgreen',88),rep('indianred',1082))
+write.csv(PCA_cpm_log_filtered,file = 'CPM_log_HS_tumorvscontrol.csv',row.names = T)
+
 
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[,which(apply(PCA_cpm_log_nonHS, 2, var) != 0)]
 PCA_cpm_log_nonHS_filtered <- PCA_cpm_log_nonHS[which(apply(PCA_cpm_log_nonHS, 1, var) != 0),]
+write.csv(PCA_cpm_log_nonHS_filtered,file = 'CPM_log_all_tumorvscontrol.csv',row.names = T)
 
 
 PCA_cpm_log_woHS_filtered <- PCA_cpm_log_woHS[,which(apply(PCA_cpm_log_woHS, 2, var) != 0)]
 PCA_cpm_log_woHS_filtered <- PCA_cpm_log_woHS[which(apply(PCA_cpm_log_woHS, 1, var) != 0),]
+write.csv(PCA_cpm_log_woHS_filtered,file = 'CPM_log_woHS_tumorvscontrol.csv',row.names = T)
+
 
 #### PCA plot HS ####
 data.PC_HS <- prcomp(t(PCA_cpm_log_filtered),scale. = T)
-jpeg(filename = '../images/PCA_plot_DEGs_log_HS.jpeg')
+# jpeg(filename = '../images/PCA_plot_DEGs_log_HS.jpeg')
 plot(data.PC_HS$x[,1:2],col=color,pch = 19) 
-dev.off()
+# dev.off()
 
 #### PCA plot all genes####
 data.PC_nonHS <- prcomp(t(PCA_cpm_log_nonHS_filtered),scale. = T)
 plot(data.PC_nonHS$x[,1:2],col=color,pch = 19) 
+
 
 #### PCA without HS ####
 data.PC_woHS <- prcomp(t(PCA_cpm_log_woHS_filtered),scale. = T)
@@ -524,8 +523,8 @@ plot(data.PC_woHS_control$x[,1:2],col= c(rep('darkgreen',88)),pch=19)
 # clusterino_pam2<-data.frame(data.PC.tumor_HS)
 
 
-''' Allora si può mettere la stesso tipo di dataframe come usando dati pca$x gia presenti, 
-l unica cosa è cambiare il vaore di pC2 a positivo, però non capisco il motivo, per averlo più comodo nel plot??  '''
+# ''' Allora si può mettere la stesso tipo di dataframe come usando dati pca$x gia presenti, 
+# l unica cosa è cambiare il vaore di pC2 a positivo, però non capisco il motivo, per averlo più comodo nel plot??  '''
 
 
 clusterino_pam2 <- as.data.frame(data.PC.tumor_HS$x)
@@ -562,25 +561,32 @@ for (row in 1:dim(metadata_choort_7_8)[1]){  Age <- metadata_choort_7_8$`Age (ye
 
 
 
+# components2 <- as.data.frame(data.PC.tumor$x)
+# components2<-cbind(components2, clusterino_pam2)
+# components2$PC2 <- -components2$PC2
 
-components2 <- as.data.frame(data.PC.tumor$x)
-components2<-cbind(components2, clusterino_pam2)
-components2$PC2 <- -components2$PC2
-fig3<-plot_ly(components2, x=~PC1, y=~PC2, color=clusterino_pam2$type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+fig3<-plot_ly(clusterino_pam2, x=~PC1, y=~PC2, color=clusterino_pam2$type,colors=c('green', 'lightblue4', 'black') ,type='scatter',mode='markers')
 
 fig3
 
-fig4<-plot_ly(components2, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$type,colors=c('darkred', 'blue4') ,mode='markers')
+fig4<-plot_ly(clusterino_pam2, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2$type,colors=c('green', 'lightblue4', 'black') ,mode='markers', size = 2)
 fig4
 
-components2_nonHS <- as.data.frame(data.PC_nonHG_tumor$x)
-components2_nonHS<-cbind(components2_nonHS, clusterino_pam2_nonHS)
+components2_nonHS <- as.data.frame(data.PC_nonHS_tumor$x)
+components2_nonHS<-cbind(components2_nonHS, clusterino_pam2)
 components2_nonHS$PC2 <- -components2_nonHS$PC2
-fig3_nonHS<-plot_ly(components2_nonHS, x=~PC1, y=~PC2, color=clusterino_pam2_nonHS$type,colors=c('red2', 'blue4') ,type='scatter',mode='markers')
+fig3_nonHS<-plot_ly(components2_nonHS, x=~PC1, y=~PC2, color=components2_nonHS$type,colors=c('green', 'lightblue4', 'black') ,type='scatter',mode='markers')
 fig3_nonHS
 
-fig4_nonHS<-plot_ly(components2_nonHS, x=~PC1, y=~PC2,z=~PC3, color=clusterino_pam2_nonHS$type,colors=c('darkred', 'blue4') ,mode='markers')
+fig4_nonHS<-plot_ly(components2_nonHS, x=~PC1, y=~PC2,z=~PC3, color=components2_nonHS$type,colors=c('green', 'lightblue4', 'black') ,mode='markers',size = 3)
 fig4_nonHS
+
+
+#''' Ovviamente DEG tumor vs control non siamo in grado di avere PCA che distingue tra adulti e pedaitrici '''
+
+
+
+
 
 # #### QUESTO DIREI CHE NON SERVE ####
 # setwd("~/Desktop/magistrale_Qcb/3master_QCB_first_semester_second_year/biological_data_mining_blanzieri/Laboratory_Biological_Data_Mining/Dataset/GSE181157")
@@ -632,12 +638,13 @@ fig4_nonHS
 # GSE181157 is all Pre B and Pre T
 # GSE227832 and GSE228632 is mixed
 # GSE133499 is mixed
+# 
 
 
 # NB SET WORKING DIRECTORY TO WHERE YPU HAVE THE METADATA INFO #
 
 # set all the subtypes as B cells
-clusterino_pam2$Cell_type <- 'B'
+clusterino_pam2$Cell_type <- 'Unknown'
 
 # GSE181157 are the first 173 samples
 metadata<-  readxl::read_xlsx('../Tumors/GSE181157_SampleMetadata.xlsx')
@@ -656,23 +663,34 @@ for (row in 1:dim(metadata)[1]){
 }
 
 
+# Dataset T-ALL is all T subtype -> cohort_7_&_8
+metadata_cohort_7_8 <- readxl::read_xlsx('../Tumors/Metadata_choort_7_8.xlsx',skip = 1, col_names = T)
+for (row in 1:dim(metadata_cohort_7_8)[1]){
+  Diagnosis <- metadata_cohort_7_8$Subtype[row]
+  clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_cohort_7_8$ID[row]] <- 'T'
+}
 
-# Dataset T-ALL is all T subtype
-clusterino_pam2$Cell_type[533:640] <- 'T' #by literature T_ALL is of only T cells 
+# clusterino_pam2$Cell_type[533:640] <- 'T' #by literature T_ALL is of only T cells 
 
 # GSE227832 and GSE228632 is mixed
 metadata_GSE227832<-  readxl::read_xlsx('../Tumors/Metadata_GSE227832_GSE228632/NEW_Metadata_GSE227832_GSE228632.xlsx',skip=1, col_names=T) # non ho questa cartella, manco su github
 
 table(metadata_GSE227832$`Subtype at ALL diagnosis`)
 
+# PAX5alt = B per ora 
+
 for (row in 1:dim(metadata_GSE227832)[1]){
   Diagnosis<-metadata_GSE227832$`Subtype at ALL diagnosis`[row]
   if (Diagnosis =='T-ALL'){
     clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- 'T'
-  } else{
-    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- "B"
+  } else if(Diagnosis == 'PAX5alt'){
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- 'B'
+    }else{
+    clusterino_pam2$Cell_type[rownames(clusterino_pam2) == metadata_GSE227832$public_id[row]] <- 'PreB'
+    
   }
 }
+
 
 # Dataset GSE133499 is mixed 
 metadata_GSE133499<-  readxl::read_xlsx('../Tumors/Metadata_GSE133499.xlsx', col_names=T) # the column IPT stand for immunephenotype -> ergo: commoni (Btype), pre B and T or unknown
@@ -693,10 +711,10 @@ for (row in 1:dim(metadata_GSE133499)[1]){
 
 
 table(clusterino_pam2$Cell_type)
-#  B-ALL   Pre-B   Pre-T   T-ALL Unknown 
-#  367     144      37     133      24 
+# B    PreB    PreT       T    Unknown 
+# 14     424      37     133     474 
 
-componet4 <- data.PC.tumor$x
+componet4 <- data.PC.tumor_HS$x
 componet4 <- cbind(componet4,clusterino_pam2)
 componet4$PC2 <- -componet4$PC2
 
@@ -708,9 +726,7 @@ fig8
 
 #### All genes in only tumor ####
 
-data.PC_nonHG_tumor
-
-componet7 <- data.PC_nonHG_tumor$x
+componet7 <- data.PC_nonHS_tumor$x
 componet7 <- cbind(componet7,clusterino_pam2)
 componet7$PC2 <- -componet7$PC2
 
@@ -924,8 +940,8 @@ heatplot(ego_BP_DW_HS, showCategory = 2)
 info_subtypes<-clusterino_pam2
 info_subtypes$sample<-rownames(info_subtypes)
 info_subtypes<-info_subtypes[info_subtypes$Cell_type!="Unknown",]
-tumors_subtype<-tumor_adjusted1[colnames(tumor_adjusted1) %in% rownames(info_subtypes)]
-
+# tumors_subtype<-tumor_adjusted1[colnames(tumor_adjusted1) %in% rownames(info_subtypes)]
+tumors_subtype<-filter_counts_df[colnames(filter_counts_df) %in% rownames(info_subtypes)]
 
 edge_c_subtypes <- DGEList(counts = tumors_subtype, group=info_subtypes$Cell_type, samples=info_subtypes, genes=tumors_subtype)
 edge_n_subtypes <- calcNormFactors(edge_c_subtypes,method = 'TMM')
@@ -962,8 +978,8 @@ edge_t_subtype_PreB <- glmQLFTest(edge_f_subtype,contrast=contro_subtype_PreB)
 # -> we get the top 20 DE genes
 #  We sort for the fold change
 
-# the n are the number of row. this case 21376
-DEGs_subtype_PreB <- as.data.frame(topTags(edge_t_subtype_PreB,n=21376,p.value = 0.01,sort.by = "logFC"))
+# the n are the number of row. this case 20827 --12962
+DEGs_subtype_PreB <- as.data.frame(topTags(edge_t_subtype_PreB,n=12962,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -977,8 +993,10 @@ DEGs_subtype_PreB$class[which(DEGs_subtype_PreB$logCPM > 1 & DEGs_subtype_PreB$l
 DEGs_subtype_PreB <- DEGs_subtype_PreB[order(DEGs_subtype_PreB$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_PreB$class)
-# with new samples -327    +276    =8394 
-   
+# - 108    + 550    = 7607
+       
+# - 87    + 381    = 4232
+     
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
 
@@ -987,9 +1005,10 @@ Up_HS_PreB <- DEGs_subtype_PreB[DEGs_subtype_PreB$class=='+',] %>% dplyr::filter
 Down_HS_PreB<- DEGs_subtype_PreB[DEGs_subtype_PreB$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PreB[DEGs_subtype_PreB$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_PreB_HS$class)
-# with new samples -24   +8   =237
-     
-
+# - 6  + 38  = 244
+         
+# - 3 + 13   = 108 
+      
 
 #### Subtype PreT vs all the others ####
 
@@ -1006,7 +1025,7 @@ edge_t_subtype_PT<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_PT)
 #  We sort for the fold change
 
 # the n are the number of row. this case 21376
-DEGs_subtype_PT <- as.data.frame(topTags(edge_t_subtype_PT,n=21376,p.value = 0.01,sort.by = "logFC"))
+DEGs_subtype_PT <- as.data.frame(topTags(edge_t_subtype_PT,n=20827,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -1020,8 +1039,10 @@ DEGs_subtype_PT$class[which(DEGs_subtype_PT$logCPM > 1 & DEGs_subtype_PT$logFC <
 DEGs_subtype_PT <- DEGs_subtype_PT[order(DEGs_subtype_PT$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_PT$class)
-# with new samples  - 868    + 371   = 6809
-    
+# - 718   + 423   = 5394
+      
+# -    +    = 
+# 558  358 2932
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
 DEGs_subtype_PT_HS <- DEGs_subtype_PT %>% dplyr::filter(rownames(DEGs_subtype_PT) %in% Human_genes$`Ensembl ID`)
@@ -1029,8 +1050,10 @@ Up_HS_PreT <- DEGs_subtype_PT[DEGs_subtype_PT$class=='+',] %>% dplyr::filter(row
 Down_HS_PreT<- DEGs_subtype_PT[DEGs_subtype_PT$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PT[DEGs_subtype_PT$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_PT_HS$class)
-# with new samples   - 45  + 14   = 186 HS DEGs
-    
+# - 46  + 12  = 141
+
+# -  +  = 
+#   15  9 56     
 
 #### T subtype vs all other subtypes ####
 
@@ -1048,7 +1071,7 @@ edge_t_subtype_T<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_T)
 
 # the n are the number of row. this case 21376
 
-DEGs_subtype_T <- as.data.frame(topTags(edge_t_subtype_T,n=21376,p.value = 0.01,sort.by = "logFC"))
+DEGs_subtype_T <- as.data.frame(topTags(edge_t_subtype_T,n=20827,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -1062,8 +1085,10 @@ DEGs_subtype_T$class[which(DEGs_subtype_T$logCPM > 1 & DEGs_subtype_T$logFC < (-
 DEGs_subtype_T <- DEGs_subtype_T[order(DEGs_subtype_T$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_T$class)
-# with new samples    - 16   + 285   = 3417
-    
+# - 17   + 371   = 2970
+     
+# -   +   = 
+#   3 205 692
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
 DEGs_subtype_T_HS <- DEGs_subtype_T %>% dplyr::filter(rownames(DEGs_subtype_T) %in% Human_genes$`Ensembl ID`)
@@ -1071,8 +1096,10 @@ Up_HS_T <- DEGs_subtype_T[DEGs_subtype_T$class=='+',] %>% dplyr::filter(rownames
 Down_HS_T<- DEGs_subtype_T[DEGs_subtype_T$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_T[DEGs_subtype_T$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_T_HS$class)
-# with new samples +34   = 111
- 
+# -1  + 35 = 83
+
+# +  = 
+#   8 12    
 
 
 #### B subtype vs all other subtypes ####
@@ -1091,7 +1118,7 @@ edge_t_subtype_B<- glmQLFTest(edge_f_subtype,contrast=contro_subtype_B)
 
 # the n are the number of row. this case 21376
 
-DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B,n=21376,p.value = 0.01,sort.by = "logFC"))
+DEGs_subtype_B <- as.data.frame(topTags(edge_t_subtype_B,n=20827,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -1105,8 +1132,10 @@ DEGs_subtype_B$class[which(DEGs_subtype_B$logCPM > 1 & DEGs_subtype_B$logFC < (-
 DEGs_subtype_B <- DEGs_subtype_B[order(DEGs_subtype_B$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_subtype_B$class)
-# +: 293  -:51   =: 6928 
-
+#-398    +194    = 1777
+    
+# -   +   = 
+#   297 103 669 
 
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
 DEGs_subtype_B_HS <- DEGs_subtype_B %>% dplyr::filter(rownames(DEGs_subtype_B) %in% Human_genes$`Ensembl ID`)
@@ -1114,9 +1143,669 @@ Up_HS_B <- DEGs_subtype_B[DEGs_subtype_B$class=='+',] %>% dplyr::filter(rownames
 Down_HS_B<- DEGs_subtype_B[DEGs_subtype_B$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_B[DEGs_subtype_B$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_subtype_B_HS$class)
-# with new samples -2 +31 = 233
+# - 10 + 25  = 46
+
+# -  +  = 
+#   6  3 10
+
+###### PCA subtypes ###### 
+
+cpm_table_subtypes_log <-as.data.frame(log(round(cpm(edge_n_subtypes),2))) # the library size is scaled by the normalization factor
+#non utile quella in log 
+
+###### subtype B ####
+# all 
+Diff_expressed_subtypeB <- DEGs_subtype_B[which(DEGs_subtype_B$class != '='),]
+PCA_cpm_subtyeB <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeB)),]
+
+#HS 
+Diff_expressed_subtypeB_HS <- DEGs_subtype_B_HS[which(DEGs_subtype_B_HS$class != '='),]
+PCA_cpm_subtypeB_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeB_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypeB_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypeB_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeB)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyeB_filtered<-PCA_cpm_subtyeB[,which(apply(PCA_cpm_subtyeB, 2, var) != 0)]
+PCA_cpm_subtyeB_filtered<- PCA_cpm_subtyeB_filtered[which(apply(PCA_cpm_subtyeB_filtered, 1, var) != 0),]
+
+PCA_cpm_subtypeB_HS_filered <- PCA_cpm_subtypeB_HS[,which(apply(PCA_cpm_subtypeB_HS, 2, var) != 0)]
+PCA_cpm_subtypeB_HS_filered <- PCA_cpm_subtypeB_HS_filered[which(apply(PCA_cpm_subtypeB_HS_filered, 1, var) != 0),]
+
+PCA_cpm_subtypeB_woHS_filtered <- PCA_cpm_subtypeB_woHS[,which(apply(PCA_cpm_subtypeB_woHS, 2, var) != 0)]
+PCA_cpm_subtypeB_woHS_filtered <- PCA_cpm_subtypeB_woHS_filtered[which(apply(PCA_cpm_subtypeB_woHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypeB <- prcomp(t(PCA_cpm_subtyeB_filtered),scale. = T)
+subtypeB_plot <- as.data.frame(data.PC_subtypeB$x)
+subtypeB_plot$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeB_plot))]
+subtypeB_plot$PC2 <- - subtypeB_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypeB_plot, x=~PC1, y=~PC2, color=subtypeB_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot$type,colors=c('green','red') ,mode='markers', size= 5)
 
 
+#### PCA plot HS####
+data.PC_subtypeB_HS <- prcomp(t(PCA_cpm_subtypeB_HS_filered),scale. = T)
+subtypeB_plot_HS <- as.data.frame(data.PC_subtypeB_HS$x)
+subtypeB_plot_HS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeB_plot_HS))]
+subtypeB_plot_HS$PC2 <- - subtypeB_plot_HS$PC2
+
+plot_ly(subtypeB_plot_HS, x=~PC1, y=~PC2, color=subtypeB_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypeB_woHS <- prcomp(t(PCA_cpm_subtypeB_woHS_filtered),scale. = T)
+subtypeB_plot_woHS <- as.data.frame(data.PC_subtypeB_woHS$x)
+subtypeB_plot_woHS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeB_plot_woHS))]
+subtypeB_plot_woHS$PC2 <- - subtypeB_plot_woHS$PC2
+
+plot_ly(subtypeB_plot_woHS, x=~PC1, y=~PC2, color=subtypeB_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype T ####
+
+Diff_expressed_subtypeT <- DEGs_subtype_T[which(DEGs_subtype_T$class != '='),]
+PCA_cpm_subtyeT <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeT)),]
+
+#HS 
+Diff_expressed_subtypeT_HS <- DEGs_subtype_T_HS[which(DEGs_subtype_T_HS$class != '='),]
+PCA_cpm_subtypeT_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeT_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypeT_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypeT_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypeT)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyeT_filtered<-PCA_cpm_subtyeT[,which(apply(PCA_cpm_subtyeT, 2, var) != 0)]
+PCA_cpm_subtyeT_filtered<- PCA_cpm_subtyeT_filtered[which(apply(PCA_cpm_subtyeT_filtered, 1, var) != 0),]
+
+PCA_cpm_subtypeT_HS_filered <- PCA_cpm_subtypeT_HS[,which(apply(PCA_cpm_subtypeT_HS, 2, var) != 0)]
+PCA_cpm_subtypeT_HS_filered <- PCA_cpm_subtypeT_HS_filered[which(apply(PCA_cpm_subtypeT_HS_filered, 1, var) != 0),]
+
+PCA_cpm_subtypeT_woHS_filtered <- PCA_cpm_subtypeT_woHS[,which(apply(PCA_cpm_subtypeT_woHS, 2, var) != 0)]
+PCA_cpm_subtypeT_woHS_filtered <- PCA_cpm_subtypeT_woHS_filtered[which(apply(PCA_cpm_subtypeT_woHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypeT <- prcomp(t(PCA_cpm_subtyeT_filtered),scale. = T)
+subtypeT_plot <- as.data.frame(data.PC_subtypeT$x)
+subtypeT_plot$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeT_plot))]
+subtypeT_plot$PC2 <- - subtypeT_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypeT_plot, x=~PC1, y=~PC2, color=subtypeT_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypeT_HS <- prcomp(t(PCA_cpm_subtypeT_HS_filered),scale. = T)
+subtypeT_plot_HS <- as.data.frame(data.PC_subtypeT_HS$x)
+subtypeT_plot_HS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeT_plot_HS))]
+subtypeT_plot_HS$PC2 <- - subtypeT_plot_HS$PC2
+
+plot_ly(subtypeT_plot_HS, x=~PC1, y=~PC2, color=subtypeT_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypeT_woHS <- prcomp(t(PCA_cpm_subtypeT_woHS_filtered),scale. = T)
+subtypeT_plot_woHS <- as.data.frame(data.PC_subtypeT_woHS$x)
+subtypeT_plot_woHS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypeT_plot_woHS))]
+subtypeT_plot_woHS$PC2 <- - subtypeT_plot_woHS$PC2
+
+plot_ly(subtypeT_plot_woHS, x=~PC1, y=~PC2, color=subtypeT_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype PreT ####
+
+Diff_expressed_subtypePT <- DEGs_subtype_PT[which(DEGs_subtype_PT$class != '='),]
+PCA_cpm_subtyePT <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT)),]
+
+#HS 
+Diff_expressed_subtypePT_HS <- DEGs_subtype_PT_HS[which(DEGs_subtype_PT_HS$class != '='),]
+PCA_cpm_subtypePT_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypePT_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypePT_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyePT_filtered<-PCA_cpm_subtyePT[,which(apply(PCA_cpm_subtyePT, 2, var) != 0)]
+PCA_cpm_subtyePT_filtered<- PCA_cpm_subtyePT_filtered[which(apply(PCA_cpm_subtyePT_filtered, 1, var) != 0),]
+
+PCA_cpm_subtypePT_HS_filered <- PCA_cpm_subtypePT_HS[,which(apply(PCA_cpm_subtypePT_HS, 2, var) != 0)]
+PCA_cpm_subtypePT_HS_filered <- PCA_cpm_subtypePT_HS_filered[which(apply(PCA_cpm_subtypePT_HS_filered, 1, var) != 0),]
+
+PCA_cpm_subtypePT_woHS_filtered <- PCA_cpm_subtypePT_woHS[,which(apply(PCA_cpm_subtypePT_woHS, 2, var) != 0)]
+PCA_cpm_subtypePT_woHS_filtered <- PCA_cpm_subtypePT_woHS_filtered[which(apply(PCA_cpm_subtypePT_woHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypePT <- prcomp(t(PCA_cpm_subtyePT_filtered),scale. = T)
+subtypePT_plot <- as.data.frame(data.PC_subtypePT$x)
+subtypePT_plot$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePT_plot))]
+subtypePT_plot$PC2 <- - subtypePT_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypePT_plot, x=~PC1, y=~PC2, color=subtypePT_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypePT_HS <- prcomp(t(PCA_cpm_subtypePT_HS_filered),scale. = T)
+subtypePT_plot_HS <- as.data.frame(data.PC_subtypePT_HS$x)
+subtypePT_plot_HS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePT_plot_HS))]
+subtypePT_plot_HS$PC2 <- - subtypePT_plot_HS$PC2
+
+plot_ly(subtypePT_plot_HS, x=~PC1, y=~PC2, color=subtypePT_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypePT_woHS <- prcomp(t(PCA_cpm_subtypePT_woHS_filtered),scale. = T)
+subtypePT_plot_woHS <- as.data.frame(data.PC_subtypePT_woHS$x)
+subtypePT_plot_woHS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePT_plot_woHS))]
+subtypePT_plot_woHS$PC2 <- - subtypePT_plot_woHS$PC2
+
+plot_ly(subtypePT_plot_woHS, x=~PC1, y=~PC2, color=subtypePT_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype PreB ####
+
+Diff_expressed_subtypePB <- DEGs_subtype_PreB[which(DEGs_subtype_PreB$class != '='),]
+PCA_cpm_subtyePB <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB)),]
+
+#HS 
+Diff_expressed_subtypePB_HS <- DEGs_subtype_PreB_HS[which(DEGs_subtype_PreB_HS$class != '='),]
+PCA_cpm_subtypePB_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypePB_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypePB_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyePB_filtered<-PCA_cpm_subtyePB[,which(apply(PCA_cpm_subtyePB, 2, var) != 0)]
+PCA_cpm_subtyePB_filtered<- PCA_cpm_subtyePB_filtered[which(apply(PCA_cpm_subtyePB_filtered, 1, var) != 0),]
+write.csv(PCA_cpm_subtyePB_filtered,file = 'CPM_log_all_subtypePB.csv',row.names = T)
+
+
+PCA_cpm_subtypePB_HS_filered <- PCA_cpm_subtypePB_HS[,which(apply(PCA_cpm_subtypePB_HS, 2, var) != 0)]
+PCA_cpm_subtypePB_HS_filered <- PCA_cpm_subtypePB_HS_filered[which(apply(PCA_cpm_subtypePB_HS_filered, 1, var) != 0),]
+write.csv(PCA_cpm_subtypePB_HS_filered,file = 'CPM_log_HS_subtypePB.csv',row.names = T)
+
+
+PCA_cpm_subtypePB_woHS_filtered <- PCA_cpm_subtypePB_woHS[,which(apply(PCA_cpm_subtypePB_woHS, 2, var) != 0)]
+PCA_cpm_subtypePB_woHS_filtered <- PCA_cpm_subtypePB_woHS_filtered[which(apply(PCA_cpm_subtypePB_woHS_filtered, 1, var) != 0),]
+write.csv(PCA_cpm_subtypePB_woHS_filtered,file = 'CPM_log_woHS_subtypePB.csv',row.names = T)
+
+
+#### PCA plot all  ####
+data.PC_subtypePB <- prcomp(t(PCA_cpm_subtyePB_filtered),scale. = T)
+subtypePB_plot <- as.data.frame(data.PC_subtypePB$x)
+subtypePB_plot$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot))]
+subtypePB_plot$PC2 <- - subtypePB_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypePB_plot, x=~PC1, y=~PC2, color=subtypePB_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypePB_HS <- prcomp(t(PCA_cpm_subtypePB_HS_filered),scale. = T)
+subtypePB_plot_HS <- as.data.frame(data.PC_subtypePB_HS$x)
+subtypePB_plot_HS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot_HS))]
+subtypePB_plot_HS$PC2 <- - subtypePB_plot_HS$PC2
+
+plot_ly(subtypePB_plot_HS, x=~PC1, y=~PC2, color=subtypePB_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypePB_woHS <- prcomp(t(PCA_cpm_subtypePB_woHS_filtered),scale. = T)
+subtypePB_plot_woHS <- as.data.frame(data.PC_subtypePB_woHS$x)
+subtypePB_plot_woHS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot_woHS))]
+subtypePB_plot_woHS$PC2 <- - subtypePB_plot_woHS$PC2
+
+plot_ly(subtypePB_plot_woHS, x=~PC1, y=~PC2, color=subtypePB_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+##### DEG with diffrent formula ##### 
+
+#### DEG subtype vs subtype with controls ####
+
+# creating a dataframe containing the info on the samples, this is needed to be able to perform the DGE
+
+# clusterino_pam2 contains in Cell type columns the info on the subtypes
+
+info_subtypes_controls<-info_samples
+info_subtypes_controls$sample<-rownames(info_subtypes_controls)
+info_subtypes_controls[rownames(info_subtypes_controls) %in% rownames(clusterino_pam2),]$condition <- clusterino_pam2[rownames(clusterino_pam2) %in% rownames(info_subtypes_controls),]$Cell_type
+info_subtypes_controls<-info_subtypes_controls[info_subtypes_controls$condition!="Unknown",]
+# we need to filter out the samples that have unknown subtypes from the initial count dataframe!
+filtered_count_df_subtypes<-filter_counts_df[colnames(filter_counts_df) %in% rownames(info_subtypes_controls)]
+edge_c_subtypes_control <- DGEList(counts = filtered_count_df_subtypes, group=info_subtypes_controls$condition, samples=info_subtypes_controls, genes=filtered_count_df_subtypes)
+
+
+
+edge_n_subtypes_controls <- calcNormFactors(edge_c_subtypes_control,method = 'TMM')
+# We create the cpm table
+cpm_table_subtypes_controls <-as.data.frame(round(cpm(edge_n_subtypes_controls),2)) # the library size is scaled by the normalization factor
+
+# Here we define the experimental design matrix, we build a model with no intercept also we have two varaibles, one for each condition 
+# 1 for control and 2 for tumor 
+design_subtype_control <- model.matrix(~0+group, data = edge_n_subtypes_controls$samples, contrast.arg=list(group='contr.sum'))
+colnames(design_subtype_control) <- levels(edge_n_subtypes_controls$samples$group)
+rownames(design_subtype_control) <- edge_n_subtypes_controls$samples$sample
+colnames(design_subtype_control)<-c("B","H","PreB", "PreT", "T")
+
+
+# Calculate dispersion and fit the result with edgeR (necessary for differential expression analysis)
+edge_d_subtype_control <- estimateDisp(edge_n_subtypes_controls,design_subtype_control)
+
+# Fit the data we model the data using a negative binomial distribution
+edge_f_subtype_control<-glmQLFit(edge_d_subtype_control, design_subtype_control)
+
+####PreB vs all other subtype####
+
+# Definition of the contrast (conditions to be compared)
+contro_subtype_PreB_control <- makeContrasts("PreB-(PreT+T+B+H)/4", levels=design_subtype_control)
+#contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
+
+# Fit the model with generalized linear models
+edge_t_subtype_PreB_control <- glmQLFTest(edge_f_subtype_control,contrast=contro_subtype_PreB_control)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 21376
+DEGs_subtype_PreB_control <- as.data.frame(topTags(edge_t_subtype_PreB_control,n=12962,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_subtype_PreB_control$class <- '='
+DEGs_subtype_PreB_control$class[which(DEGs_subtype_PreB_control$logCPM > 1 & DEGs_subtype_PreB_control$logFC > 1.5)] = '+'
+DEGs_subtype_PreB_control$class[which(DEGs_subtype_PreB_control$logCPM > 1 & DEGs_subtype_PreB_control$logFC < (-1.5))] = '-'
+DEGs_subtype_PreB_control <- DEGs_subtype_PreB_control[order(DEGs_subtype_PreB_control$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_subtype_PreB_control$class)
+# - 118    + 659    = 6265
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+
+DEGs_subtype_PreB_control_HS <- DEGs_subtype_PreB_control %>% dplyr::filter(rownames(DEGs_subtype_PreB_control) %in% Human_genes$`Ensembl ID`)
+Up_HS_PreB_control <- DEGs_subtype_PreB_control[DEGs_subtype_PreB_control$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_PreB_control[DEGs_subtype_PreB_control$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_PreB<- DEGs_subtype_PreB_control[DEGs_subtype_PreB_control$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PreB_control[DEGs_subtype_PreB_control$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_PreB_control_HS$class)
+# - 3  + 26  = 152
+
+
+
+#### Subtype PreT vs all the others ####
+
+# Definition of the contrast (conditions to be compared)
+contro_subtype_PT_control <- makeContrasts("PreT-(PreB+T+B+H)/4", levels=design_subtype_control)
+#contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
+
+# Fit the model with generalized linear models
+edge_t_subtype_PT_control<- glmQLFTest(edge_f_subtype_control,contrast=contro_subtype_PT_control)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 21376
+DEGs_subtype_PT_control <- as.data.frame(topTags(edge_t_subtype_PT_control,n=12962,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_subtype_PT_control$class <- '='
+DEGs_subtype_PT_control$class[which(DEGs_subtype_PT_control$logCPM > 1 & DEGs_subtype_PT_control$logFC > 1.5)] = '+'
+DEGs_subtype_PT_control$class[which(DEGs_subtype_PT_control$logCPM > 1 & DEGs_subtype_PT_control$logFC < (-1.5))] = '-'
+DEGs_subtype_PT_control <- DEGs_subtype_PT_control[order(DEGs_subtype_PT_control$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_subtype_PT_control$class)
+# - 517   + 574   = 3765
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+DEGs_subtype_PT_HS_control <- DEGs_subtype_PT_control %>% dplyr::filter(rownames(DEGs_subtype_PT_control) %in% Human_genes$`Ensembl ID`)
+Up_HS_PreT_control <- DEGs_subtype_PT_control[DEGs_subtype_PT_control$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_PT_control[DEGs_subtype_PT_control$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_PreT_control<- DEGs_subtype_PT_control[DEGs_subtype_PT_control$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_PT_control[DEGs_subtype_PT_control$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_PT_HS_control$class)
+# - 11  + 17  = 88
+
+
+#### T subtype vs all other subtypes ####
+
+# Definition of the contrast (conditions to be compared)
+contro_subtype_T_control <- makeContrasts("T-(PreB+PreT+B+H)/4", levels=design_subtype_control)
+#contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
+
+# Fit the model with generalized linear models
+edge_t_subtype_T_control<- glmQLFTest(edge_f_subtype_control,contrast=contro_subtype_T_control)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 21376
+
+DEGs_subtype_T_control <- as.data.frame(topTags(edge_t_subtype_T_control,n=12962,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_subtype_T_control$class <- '='
+DEGs_subtype_T_control$class[which(DEGs_subtype_T_control$logCPM > 1 & DEGs_subtype_T_control$logFC > 1.5)] = '+'
+DEGs_subtype_T_control$class[which(DEGs_subtype_T_control$logCPM > 1 & DEGs_subtype_T_control$logFC < (-1.5))] = '-'
+DEGs_subtype_T_control <- DEGs_subtype_T_control[order(DEGs_subtype_T_control$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_subtype_T_control$class)
+# - 12   + 533   = 3215
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+DEGs_subtype_T_HS_control <- DEGs_subtype_T_control %>% dplyr::filter(rownames(DEGs_subtype_T_control) %in% Human_genes$`Ensembl ID`)
+Up_HS_T <- DEGs_subtype_T_control[DEGs_subtype_T_control$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_T_control[DEGs_subtype_T_control$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_T<- DEGs_subtype_T_control[DEGs_subtype_T_control$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_T_control[DEGs_subtype_T_control$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_T_HS_control$class)
+# +21 = 88
+
+
+
+#### B subtype vs all other subtypes ####
+
+# Definition of the contrast (conditions to be compared)
+contro_subtype_B_control <- makeContrasts("B-(PreB+PreT+T+H)/4", levels=design_subtype_control)
+#contro_subtype[,"PreB-PreT-T"]<-c(1, -0.5, -0.5)
+
+# Fit the model with generalized linear models
+edge_t_subtype_B_control<- glmQLFTest(edge_f_subtype_control,contrast=contro_subtype_B_control)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 21376
+
+DEGs_subtype_B_control <- as.data.frame(topTags(edge_t_subtype_B_control,n=12962,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_subtype_B_control$class <- '='
+DEGs_subtype_B_control$class[which(DEGs_subtype_B_control$logCPM > 1 & DEGs_subtype_B_control$logFC > 1.5)] = '+'
+DEGs_subtype_B_control$class[which(DEGs_subtype_B_control$logCPM > 1 & DEGs_subtype_B_control$logFC < (-1.5))] = '-'
+DEGs_subtype_B_control <- DEGs_subtype_B_control[order(DEGs_subtype_B_control$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_subtype_B_control$class)
+#-543    +324    = 1826
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in Pre B type
+DEGs_subtype_B_HS_control <- DEGs_subtype_B_control %>% dplyr::filter(rownames(DEGs_subtype_B_control) %in% Human_genes$`Ensembl ID`)
+Up_HS_B_control <- DEGs_subtype_B_control[DEGs_subtype_B_control$class=='+',] %>% dplyr::filter(rownames(DEGs_subtype_B_control[DEGs_subtype_B_control$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_B_control<- DEGs_subtype_B_control[DEGs_subtype_B_control$class=='-',] %>% dplyr::filter(rownames(DEGs_subtype_B_control[DEGs_subtype_B_control$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_subtype_B_HS_control$class)
+# with new samples -11 +13 = 33
+
+
+
+###### PCA subtypes ###### 
+
+cpm_table_subtypes_log <-as.data.frame(log(round(cpm(edge_n_subtypes),2))) # the library size is scaled by the normalization factor
+#non utile quella in log 
+
+###### subtype B ####
+# all 
+Diff_expressed_subtypeB_control <- DEGs_subtype_B_control[which(DEGs_subtype_B_control$class != '='),]
+PCA_cpm_subtyeB_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeB_control)),]
+
+#HS 
+Diff_expressed_subtypeB_HS_control <- DEGs_subtype_B_HS_control[which(DEGs_subtype_B_HS_control$class != '='),]
+PCA_cpm_subtypeB_HS_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeB_HS_control)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypeB_woHS_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %nin% rownames(Diff_expressed_subtypeB_HS_control) & rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeB_control)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyeB_filtered_control<-PCA_cpm_subtyeB_control[,which(apply(PCA_cpm_subtyeB_control, 2, var) != 0)]
+PCA_cpm_subtyeB_filtered_control<- PCA_cpm_subtyeB_filtered_control[which(apply(PCA_cpm_subtyeB_filtered_control, 1, var) != 0),]
+
+PCA_cpm_subtypeB_HS_filered_control <- PCA_cpm_subtypeB_HS_control[,which(apply(PCA_cpm_subtypeB_HS_control, 2, var) != 0)]
+PCA_cpm_subtypeB_HS_filered_control <- PCA_cpm_subtypeB_HS_filered_control[which(apply(PCA_cpm_subtypeB_HS_filered_control, 1, var) != 0),]
+
+PCA_cpm_subtypeB_woHS_filtered_control <- PCA_cpm_subtypeB_woHS_control[,which(apply(PCA_cpm_subtypeB_woHS_control, 2, var) != 0)]
+PCA_cpm_subtypeB_woHS_filtered_control <- PCA_cpm_subtypeB_woHS_filtered_control[which(apply(PCA_cpm_subtypeB_woHS_filtered_control, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypeB_control <- prcomp(t(PCA_cpm_subtyeB_filtered_control),scale. = T)
+subtypeB_plot_control <- as.data.frame(data.PC_subtypeB_control$x)
+subtypeB_plot_control$type <- info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeB_plot_control))]
+subtypeB_plot_control$PC2 <- - subtypeB_plot_control$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypeB_plot_control, x=~PC1, y=~PC2, color=subtypeB_plot_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypeB_HS_control <- prcomp(t(PCA_cpm_subtypeB_HS_filered_control),scale. = T)
+subtypeB_plot_HS_control <- as.data.frame(data.PC_subtypeB_HS_control$x)
+subtypeB_plot_HS_control$type <-  info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeB_plot_HS_control))]
+subtypeB_plot_HS_control$PC2 <- - subtypeB_plot_HS_control$PC2
+
+plot_ly(subtypeB_plot_HS_control, x=~PC1, y=~PC2, color=subtypeB_plot_HS_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot_HS_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot_HS_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypeB_woHS_control <- prcomp(t(PCA_cpm_subtypeB_woHS_filtered_control),scale. = T)
+subtypeB_plot_woHS_control <- as.data.frame(data.PC_subtypeB_woHS_control$x)
+subtypeB_plot_woHS_control$type <-  info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeB_plot_woHS_control))]
+subtypeB_plot_woHS_control$PC2 <- - subtypeB_plot_woHS_control$PC2
+
+plot_ly(subtypeB_plot_woHS_control, x=~PC1, y=~PC2, color=subtypeB_plot_woHS_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeB_plot_woHS_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeB_plot_woHS_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype T ####
+
+Diff_expressed_subtypeT_control <- DEGs_subtype_T_control[which(DEGs_subtype_T_control$class != '='),]
+PCA_cpm_subtyeT_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeT_control)),]
+
+#HS 
+Diff_expressed_subtypeT_HS_control <- DEGs_subtype_T_HS_control[which(DEGs_subtype_T_HS_control$class != '='),]
+PCA_cpm_subtypeT_HS_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeT_HS_control)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypeT_woHS_control <- cpm_table_subtypes_controls[which(rownames(cpm_table_subtypes_controls) %nin% rownames(Diff_expressed_subtypeT_HS_control) & rownames(cpm_table_subtypes_controls) %in% rownames(Diff_expressed_subtypeT_control)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyeT_filtered_control<-PCA_cpm_subtyeT_control[,which(apply(PCA_cpm_subtyeT_control, 2, var) != 0)]
+PCA_cpm_subtyeT_filtered_control<- PCA_cpm_subtyeT_filtered_control[which(apply(PCA_cpm_subtyeT_filtered_control, 1, var) != 0),]
+
+PCA_cpm_subtypeT_HS_filered_control <- PCA_cpm_subtypeT_HS_control[,which(apply(PCA_cpm_subtypeT_HS_control, 2, var) != 0)]
+PCA_cpm_subtypeT_HS_filered_control <-PCA_cpm_subtypeT_HS_filered_control[which(apply(PCA_cpm_subtypeT_HS_filered_control, 1, var) != 0),]
+
+PCA_cpm_subtypeT_woHS_filtered_control <- PCA_cpm_subtypeT_woHS_control[,which(apply(PCA_cpm_subtypeT_woHS_control, 2, var) != 0)]
+PCA_cpm_subtypeT_woHS_filtered_control <- PCA_cpm_subtypeT_woHS_filtered_control[which(apply(PCA_cpm_subtypeT_woHS_filtered_control, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypeT_control <- prcomp(t(PCA_cpm_subtyeT_filtered_control),scale. = T)
+subtypeT_plot_control <- as.data.frame(data.PC_subtypeT_control$x)
+subtypeT_plot_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_control))]
+subtypeT_plot_control$PC2 <- - subtypeT_plot_control$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypeT_plot_control, x=~PC1, y=~PC2, color=subtypeT_plot_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypeT_HS_control <- prcomp(t(PCA_cpm_subtypeT_HS_filered_control),scale. = T)
+subtypeT_plot_HS_control <- as.data.frame(data.PC_subtypeT_HS_control$x)
+subtypeT_plot_HS_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_HS_control))]
+subtypeT_plot_HS_control$PC2 <- - subtypeT_plot_HS_control$PC2
+
+plot_ly(subtypeT_plot_HS_control, x=~PC1, y=~PC2, color=subtypeT_plot_HS_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot_HS_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot_HS_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA without HS ####
+data.PC_subtypeT_woHS_control <- prcomp(t(PCA_cpm_subtypeT_woHS_filtered_control),scale. = T)
+subtypeT_plot_woHS_control <- as.data.frame(data.PC_subtypeT_woHS_control$x)
+subtypeT_plot_woHS_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_woHS_control))]
+subtypeT_plot_woHS_control$PC2 <- - subtypeT_plot_woHS_control$PC2
+
+plot_ly(subtypeT_plot_woHS_control, x=~PC1, y=~PC2, color=subtypeT_plot_woHS_control$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypeT_plot_woHS_control, x=~PC1, y=~PC2, z=~PC3, color=subtypeT_plot_woHS_control$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype PreT ####
+
+Diff_expressed_subtypePT <- DEGs_subtype_PT[which(DEGs_subtype_PT$class != '='),]
+PCA_cpm_subtyePT <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT)),]
+
+#HS 
+Diff_expressed_subtypePT_HS <- DEGs_subtype_PT_HS[which(DEGs_subtype_PT_HS$class != '='),]
+PCA_cpm_subtypePT_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypePT_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypePT_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePT)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyePT_filtered<-PCA_cpm_subtyePT[,which(apply(PCA_cpm_subtyePT, 2, var) != 0)]
+PCA_cpm_subtyePT_filtered<- PCA_cpm_subtyePT_filtered[which(apply(PCA_cpm_subtyePT_filtered, 1, var) != 0),]
+
+PCA_cpm_subtypePT_HS_filered <- PCA_cpm_subtypePT_HS[,which(apply(PCA_cpm_subtypePT_HS, 2, var) != 0)]
+PCA_cpm_subtypePT_HS_filered <- PCA_cpm_subtypePT_HS_filered[which(apply(PCA_cpm_subtypePT_HS_filered, 1, var) != 0),]
+
+PCA_cpm_subtypePT_woHS_filtered <- PCA_cpm_subtypePT_woHS[,which(apply(PCA_cpm_subtypePT_woHS, 2, var) != 0)]
+PCA_cpm_subtypePT_woHS_filtered <- PCA_cpm_subtypePT_woHS_filtered[which(apply(PCA_cpm_subtypePT_woHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypePT <- prcomp(t(PCA_cpm_subtyePT_filtered),scale. = T)
+subtypePT_plot <- as.data.frame(data.PC_subtypePT$x)
+subtypeT_plot_woHS_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_woHS_control))]
+subtypePT_plot$PC2 <- - subtypePT_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypePT_plot, x=~PC1, y=~PC2, color=subtypePT_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypePT_HS <- prcomp(t(PCA_cpm_subtypePT_HS_filered),scale. = T)
+subtypePT_plot_HS <- as.data.frame(data.PC_subtypePT_HS$x)
+subtypeT_plot_woHS_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_woHS_control))]
+subtypePT_plot_HS$PC2 <- - subtypePT_plot_HS$PC2
+
+plot_ly(subtypePT_plot_HS, x=~PC1, y=~PC2, color=subtypePT_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypePT_woHS <- prcomp(t(PCA_cpm_subtypePT_woHS_filtered),scale. = T)
+subtypePT_plot_woHS <- as.data.frame(data.PC_subtypePT_woHS$x)
+subtypeT_plot_woHS_control$type <-info_subtypes_controls$condition[which(rownames(info_subtypes_controls) %in% rownames(subtypeT_plot_woHS_control))]
+subtypePT_plot_woHS$PC2 <- - subtypePT_plot_woHS$PC2
+
+plot_ly(subtypePT_plot_woHS, x=~PC1, y=~PC2, color=subtypePT_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePT_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypePT_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+###### subtype PreB ####
+
+Diff_expressed_subtypePB <- DEGs_subtype_PreB[which(DEGs_subtype_PreB$class != '='),]
+PCA_cpm_subtyePB <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB)),]
+
+#HS 
+Diff_expressed_subtypePB_HS <- DEGs_subtype_PreB_HS[which(DEGs_subtype_PreB_HS$class != '='),]
+PCA_cpm_subtypePB_HS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB_HS)),] # all genes Diff expressed
+
+#without HS 
+PCA_cpm_subtypePB_woHS <- cpm_table_subtypes[which(rownames(cpm_table_subtypes) %nin% rownames(Diff_expressed_subtypePB_HS) & rownames(cpm_table_subtypes) %in% rownames(Diff_expressed_subtypePB)),] # all genes Diff expressed
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+####filtered  #####
+PCA_cpm_subtyePB_filtered<-PCA_cpm_subtyePB[,which(apply(PCA_cpm_subtyePB, 2, var) != 0)]
+PCA_cpm_subtyePB_filtered<- PCA_cpm_subtyePB_filtered[which(apply(PCA_cpm_subtyePB_filtered, 1, var) != 0),]
+
+PCA_cpm_subtypePB_HS_filered <- PCA_cpm_subtypePB_HS[,which(apply(PCA_cpm_subtypePB_HS, 2, var) != 0)]
+PCA_cpm_subtypePB_HS_filered <- PCA_cpm_subtypePB_HS_filered[which(apply(PCA_cpm_subtypePB_HS_filered, 1, var) != 0),]
+
+PCA_cpm_subtypePB_woHS_filtered <- PCA_cpm_subtypePB_woHS[,which(apply(PCA_cpm_subtypePB_woHS, 2, var) != 0)]
+PCA_cpm_subtypePB_woHS_filtered <- PCA_cpm_subtypePB_woHS_filtered[which(apply(PCA_cpm_subtypePB_woHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_subtypePB <- prcomp(t(PCA_cpm_subtyePB_filtered),scale. = T)
+subtypePB_plot <- as.data.frame(data.PC_subtypePB$x)
+subtypePB_plot$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot))]
+subtypePB_plot$PC2 <- - subtypePB_plot$PC2
+#senza gli unknown ! 
+
+plot_ly(subtypePB_plot, x=~PC1, y=~PC2, color=subtypePB_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+#### PCA plot HS####
+data.PC_subtypePB_HS <- prcomp(t(PCA_cpm_subtypePB_HS_filered),scale. = T)
+subtypePB_plot_HS <- as.data.frame(data.PC_subtypePB_HS$x)
+subtypePB_plot_HS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot_HS))]
+subtypePB_plot_HS$PC2 <- - subtypePB_plot_HS$PC2
+
+plot_ly(subtypePB_plot_HS, x=~PC1, y=~PC2, color=subtypePB_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_subtypePB_woHS <- prcomp(t(PCA_cpm_subtypePB_woHS_filtered),scale. = T)
+subtypePB_plot_woHS <- as.data.frame(data.PC_subtypePB_woHS$x)
+subtypePB_plot_woHS$type <- clusterino_pam2$Cell_type[which(rownames(clusterino_pam2) %in% rownames(subtypePB_plot_woHS))]
+subtypePB_plot_woHS$PC2 <- - subtypePB_plot_woHS$PC2
+
+plot_ly(subtypePB_plot_woHS, x=~PC1, y=~PC2, color=subtypePB_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(subtypePB_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=subtypePB_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
 
 #### COMPARISON BETWEEN THE HS IN THE 4 SUBTYPES ####
@@ -1817,6 +2506,7 @@ head(down_T_kegg,10)
 
 ############ DEG adults vs pediatric of course just tumor ###### 
 
+
 # clusterino_pam2 contains in Cell type columns the info on the subtypes
 info_age<-clusterino_pam2
 
@@ -1848,9 +2538,9 @@ edge_t_age<- glmQLFTest(edge_f_age,contrast=contro_age)
 # -> we get the top 20 DE genes
 #  We sort for the fold change
 
-# the n are the number of row. this case 21376
+# the n are the number of row. this case 20827
 
-DEGs_age <- as.data.frame(topTags(edge_t_age,n=21376,p.value = 0.01,sort.by = "logFC"))
+DEGs_age <- as.data.frame(topTags(edge_t_age,n=20827,p.value = 0.01,sort.by = "logFC"))
 
 # We add a new column to the DEGs dataframe called class.
 # Used to express the values of the fold change of the transcripts.
@@ -1864,7 +2554,8 @@ DEGs_age$class[which(DEGs_age$logCPM > 1 & DEGs_age$logFC < (-1.5))] = '-'
 DEGs_age <- DEGs_age[order(DEGs_age$logFC, decreasing = T),] # we order based on the fold change
 
 table(DEGs_age$class)
-# after adjustment of age, so over 18 adults under and also 18 pediatric  - 94   + 69   = 3754 -> more DEGS?!
+# - 80   + 64   = 3479
+     
      
 # Let`s check how many human specific genes we have in the up regulated and down regulated genes in pediatric cancer
 DEGs_age_HS <- DEGs_age %>% dplyr::filter(rownames(DEGs_age) %in% Human_genes$`Ensembl ID`)
@@ -1872,9 +2563,83 @@ Up_HS_age <- DEGs_age[DEGs_age$class=='+',] %>% dplyr::filter(rownames(DEGs_age[
 Down_HS_age<- DEGs_age[DEGs_age$class=='-',] %>% dplyr::filter(rownames(DEGs_age[DEGs_age$class=='-',]) %in% Human_genes$`Ensembl ID`) 
 
 table(DEGs_age_HS$class)
-# after change  - 9   + 6  = 115
-     
+# - 13   +6   = 126
 
+cpm_table_age_log <- as.data.frame(round(log(cpm(edge_n_age),2)))
+
+DEGs_age_HS_selceted <- DEGs_age_HS[which(DEGs_age_HS$class != '='),]
+
+##### PCA analysis age ####
+Diff_expressed_age <- DEGs_age[which(DEGs_age$class != '='),]
+
+PCA_cpm_log_age <- cpm_table_age[which(rownames(cpm_table_age) %in% rownames(Diff_expressed_age)),] # all genes Diff expressed
+PCA_cpm_log_ageHS <- cpm_table_age[which(rownames(cpm_table_age) %in% rownames(DEGs_age_HS_selceted)),] #only HS not diff expressed
+PCA_cpm_log_agewoHS <- cpm_table_age[which(rownames(cpm_table_age) %in% rownames(Diff_expressed_age) & rownames(cpm_table_age) %nin% rownames(DEGs_age_HS_selceted)),] # Diff expressed genes without HS
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+#total
+PCA_cpm_log_age_filtered <- PCA_cpm_log_age[,which(apply(PCA_cpm_log_age, 2,var) != 0)]
+PCA_cpm_log_age_filtered<- PCA_cpm_log_age_filtered[which(apply(PCA_cpm_log_age_filtered, 1, var) != 0),]
+
+#HS
+PCA_cpm_log_ageHS_filtered <- PCA_cpm_log_ageHS[,which(apply(PCA_cpm_log_ageHS, 2, var) != 0)]
+PCA_cpm_log_ageHS_filtered <- PCA_cpm_log_ageHS_filtered[which(apply(PCA_cpm_log_ageHS_filtered, 1, var) != 0),]
+
+#without HS 
+PCA_cpm_log_agewoHS_filtered <- PCA_cpm_log_agewoHS[,which(apply(PCA_cpm_log_agewoHS, 2, var) != 0)]
+PCA_cpm_log_agewoHS_filtered <- PCA_cpm_log_agewoHS_filtered[which(apply(PCA_cpm_log_agewoHS_filtered, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_age <- prcomp(t(PCA_cpm_log_age_filtered),scale. = T)
+age_plot <- as.data.frame(data.PC_age$x)
+age_plot$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot))]
+age_plot$PC2 <- - age_plot$PC2
+
+plot_ly(age_plot, x=~PC1, y=~PC2, color=age_plot$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot, x=~PC1, y=~PC2, z=~PC3, color=age_plot$type,colors=c('green','red') ,mode='markers', size= 5)
+
+age_plot_2<- age_plot
+age_plot_2$age <- clusterino_pam2$age[which(rownames(clusterino_pam2) %in% rownames(age_plot_2))]
+age_plot_2 <- age_plot_2[which(age_plot_2$age != '0'),]
+
+plot_ly(age_plot_2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_2$type,colors=c('green','red') ,mode='markers', text =~age,hovertemplate = paste('Age: %{text}'), size= 5)
+
+#### PCA plot HS####
+data.PC_ageHS <- prcomp(t(PCA_cpm_log_ageHS_filtered),scale. = T)
+age_plot_HS <- as.data.frame(data.PC_ageHS$x)
+age_plot_HS$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot_HS))]
+age_plot_HS$PC2 <- - age_plot_HS$PC2
+age_plot_HS$PC1 <- - age_plot_HS$PC1
+
+plot_ly(age_plot_HS, x=~PC1, y=~PC2, color=age_plot_HS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot_HS, x=~PC1, y=~PC2, z=~PC3, color=age_plot_HS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+age_plot_HS2<- age_plot_HS
+age_plot_HS2$age <- clusterino_pam2$age[which(rownames(clusterino_pam2) %in% rownames(age_plot_HS2))]
+age_plot_HS2 <- age_plot_HS2[which(age_plot_HS2$age != '0'),]
+
+plot_ly(age_plot_HS2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_HS2$type,colors=c('green','red') ,mode='markers', text =~age,hovertemplate = paste('Age: %{text}'), size= 5)
+
+#### PCA without HS ####
+data.PC_agewoHS <- prcomp(t(PCA_cpm_log_agewoHS_filtered),scale. = T)
+age_plot_woHS <- as.data.frame(data.PC_agewoHS$x)
+age_plot_woHS$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot_woHS))]
+age_plot_woHS$PC2 <- - age_plot_woHS$PC2
+
+plot_ly(age_plot_woHS, x=~PC1, y=~PC2, color=age_plot_woHS$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot_woHS, x=~PC1, y=~PC2, z=~PC3, color=age_plot_woHS$type,colors=c('green','red') ,mode='markers', size= 5)
+
+age_plot_woHS2<- age_plot_woHS
+age_plot_woHS2$age <- clusterino_pam2$age[which(rownames(clusterino_pam2) %in% rownames(age_plot_woHS2))]
+age_plot_woHS2 <- age_plot_woHS2[which(age_plot_woHS2$age != '0'),]
+
+plot_ly(age_plot_woHS2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_woHS2$type,colors=c('green','red') ,mode='markers', text =~age,hovertemplate = paste('Age: %{text}'), size= 5)
+
+
+
+####### da rrunare ########## 
+       
 #### UMAP DEGs pediatric-adult only HS  #### 
 
 Totalage_HS_unique <- rownames(DEGs_age_HS[DEGs_age_HS$class != '=',])
@@ -2103,6 +2868,176 @@ head(down_age_wp, 10)
 # WP2877 WP2877 Vitamin D receptor pathway      5/35 187/8421 0.00097    0.068  0.060 1565/7078/9173/6280/820     5
 # WP1533 WP1533     Vitamin B12 metabolism      3/35  51/8421 0.00119    0.068  0.060          3039/3043/6352     3
 # WP236   WP236               Adipogenesis      4/35 131/8421 0.00202    0.076  0.067    56729/5618/2624/2662     4
+
+
+
+
+############## 
+
+
+######## pediatric vs (adult + control)/2 ############
+
+# clusterino_pam2 contains in Cell type columns the info on the subtypes
+info_age_2<-info_samples
+
+info_age_2[which(rownames(info_age_2) %in% rownames(info_age)),]$condition <- info_age$type
+
+edge_c_age_2 <- DGEList(counts = filter_counts_df, group=info_age_2$condition, samples=info_age_2, genes=filter_counts_df)
+
+
+edge_n_age_2 <- calcNormFactors(edge_c_age_2,method = 'TMM')
+# We create the cpm table
+cpm_table_age_2 <-as.data.frame(round(cpm(edge_n_age_2),2)) # the library size is scaled by the normalization factor
+
+# Here we define the experimental design matrix, we build a model with no intercept also we have two varaibles, one for each condition 
+# 1 for control and 2 for tumor 
+design_age_2<- model.matrix(~0+group, data = edge_n_age_2$samples)
+colnames(design_age_2) <- levels(edge_n_age_2$samples$group)
+rownames(design_age_2) <- edge_n_age_2$samples$sample
+
+# Calculate dispersion and fit the result with edgeR (necessary for differential expression analysis)
+edge_d_age_2 <- estimateDisp(edge_n_age_2,design_age_2)
+
+# Fit the data we model the data using a negative binomial distribution
+edge_f_age_2<-glmQLFit(edge_d_age_2, design_age_2)
+
+# Definition of the contrast (conditions to be compared)
+contro_age_2 <- makeContrasts("pediatric-(adult+H)/2", levels=design_age_2)
+
+# Fit the model with generalized linear models
+edge_t_age_2<- glmQLFTest(edge_f_age_2,contrast=contro_age_2)
+
+# edge_t contains the results of the DE analysis
+# -> we can extract the data using the function topTags -> extract the top20, using a cut off and sorting by fold-change
+# -> we get the top 20 DE genes
+#  We sort for the fold change
+
+# the n are the number of row. this case 20827
+#length(rownames(edge_t_age_2))
+DEGs_age_2 <- as.data.frame(topTags(edge_t_age_2,n=20827,p.value = 0.01,sort.by = "logFC"))
+
+# We add a new column to the DEGs dataframe called class.
+# Used to express the values of the fold change of the transcripts.
+# The selection is based on the log fold change ratio (>1.5 for up-regulated genes and < (-1.5) for down-regulated genes)
+# and a log CPM (>1 for both cases). From the contingency table of our DEGs we can see that the up regulated genes
+# correspond to the 3.7% of the total and the down regulated are the 16% of the total.
+
+DEGs_age_2$class <- '='
+DEGs_age_2$class[which(DEGs_age_2$logCPM > 1 & DEGs_age_2$logFC > 1.5)] = '+'
+DEGs_age_2$class[which(DEGs_age_2$logCPM > 1 & DEGs_age_2$logFC < (-1.5))] = '-'
+DEGs_age_2 <- DEGs_age_2[order(DEGs_age_2$logFC, decreasing = T),] # we order based on the fold change
+
+table(DEGs_age_2$class)
+#   -    +    = 
+#  204  905 8088 
+
+
+# Let`s check how many human specific genes we have in the up regulated and down regulated genes in pediatric cancer
+DEGs_age_HS_2 <- DEGs_age_2 %>% dplyr::filter(rownames(DEGs_age_2) %in% Human_genes$`Ensembl ID`)
+Up_HS_age_2 <- DEGs_age_2[DEGs_age_2$class=='+',] %>% dplyr::filter(rownames(DEGs_age_2[DEGs_age_2$class=='+',]) %in% Human_genes$`Ensembl ID`) 
+Down_HS_age_2<- DEGs_age_2[DEGs_age_2$class=='-',] %>% dplyr::filter(rownames(DEGs_age_2[DEGs_age_2$class=='-',]) %in% Human_genes$`Ensembl ID`) 
+
+table(DEGs_age_HS_2$class)
+# - 4   +35   = 187
+
+cpm_table_age_log_2 <- as.data.frame(round(log(cpm(edge_n_age_2),2)))
+
+DEGs_age_HS_selceted_2 <- DEGs_age_HS_2[which(DEGs_age_HS_2$class != '='),]
+
+
+##### PCA analysis age ####
+Diff_expressed_age_2 <- DEGs_age_2[which(DEGs_age_2$class != '='),]
+
+PCA_cpm_log_age_2 <- cpm_table_age_2[which(rownames(cpm_table_age_2) %in% rownames(Diff_expressed_age_2)),] # all genes Diff expressed
+PCA_cpm_log_ageHS_2 <- cpm_table_age_2[which(rownames(cpm_table_age_2) %in% rownames(DEGs_age_HS_selceted_2)),] #only HS not diff expressed
+PCA_cpm_log_agewoHS_2 <- cpm_table_age_2[which(rownames(cpm_table_age_2) %in% rownames(Diff_expressed_age_2) & rownames(cpm_table_age_2) %nin% rownames(DEGs_age_HS_selceted_2)),] # Diff expressed genes without HS
+
+# # we need to have both for the columns and the row a variance different from zero (because divide for the varaince )
+#total
+PCA_cpm_log_age_filtered_2 <- PCA_cpm_log_age_2[,which(apply(PCA_cpm_log_age_2, 2,var) != 0)]
+PCA_cpm_log_age_filtered_2<- PCA_cpm_log_age_filtered_2[which(apply(PCA_cpm_log_age_filtered_2, 1, var) != 0),]
+
+#HS
+PCA_cpm_log_ageHS_filtered_2 <- PCA_cpm_log_ageHS_2[,which(apply(PCA_cpm_log_ageHS_2, 2, var) != 0)]
+PCA_cpm_log_ageHS_filtered_2 <- PCA_cpm_log_ageHS_filtered_2[which(apply(PCA_cpm_log_ageHS_filtered_2, 1, var) != 0),]
+
+#without HS 
+PCA_cpm_log_agewoHS_filtered_2 <- PCA_cpm_log_agewoHS_2[,which(apply(PCA_cpm_log_agewoHS_2, 2, var) != 0)]
+PCA_cpm_log_agewoHS_filtered_2 <- PCA_cpm_log_agewoHS_filtered_2[which(apply(PCA_cpm_log_agewoHS_filtered_2, 1, var) != 0),]
+
+#### PCA plot all  ####
+data.PC_age_2 <- prcomp(t(PCA_cpm_log_age_filtered_2),scale. = T)
+age_plot_2 <- as.data.frame(data.PC_age_2$x)
+age_plot_2$type<-'healty'
+age_plot_2[which(rownames(age_plot_2) %in% rownames(clusterino_pam2)),]$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot_2))]
+#table(age_plot_2$type)
+# adult    healty pediatric   Unknown 
+# 98        88       982         2 
+age_plot_2$PC2 <- - age_plot_2$PC2
+
+plot_ly(age_plot_2, x=~PC1, y=~PC2, color=age_plot_2$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot_2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_2$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA plot HS####
+data.PC_ageHS_2 <- prcomp(t(PCA_cpm_log_ageHS_filtered_2),scale. = T)
+age_plot_HS_2 <- as.data.frame(data.PC_ageHS_2$x)
+#age_plot_HS_2[which(rownames(age_plot_HS_2) %in% rownames(clusterino_pam2)),]$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot_HS_2))]
+age_plot_HS_2$PC2 <- - age_plot_HS_2$PC2
+age_plot_HS_2$PC1 <- - age_plot_HS_2$PC1
+
+plot_ly(age_plot_HS_2, x=~PC1, y=~PC2, color=age_plot_2$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot_HS_2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_2$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+#### PCA without HS ####
+data.PC_agewoHS_2 <- prcomp(t(PCA_cpm_log_agewoHS_filtered_2),scale. = T)
+age_plot_woHS_2 <- as.data.frame(data.PC_agewoHS_2$x)
+#age_plot_woHS$type <- clusterino_pam2$type[which(rownames(clusterino_pam2) %in% rownames(age_plot_woHS))]
+age_plot_woHS_2$PC2 <- - age_plot_woHS_2$PC2
+
+plot_ly(age_plot_woHS_2, x=~PC1, y=~PC2, color=age_plot_2$type,colors=c('green','red') ,type='scatter',mode='markers')
+plot_ly(age_plot_woHS_2, x=~PC1, y=~PC2, z=~PC3, color=age_plot_2$type,colors=c('green','red') ,mode='markers', size= 5)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
