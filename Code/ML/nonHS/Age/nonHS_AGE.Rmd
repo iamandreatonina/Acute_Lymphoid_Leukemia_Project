@@ -1,0 +1,857 @@
+---
+title: "ML_nonHS_AGE"
+author: "Thomas Sirchi"
+format: html
+editor: source
+---
+
+# Preparatory steps
+
+Loading packages Store package names in a vectors for ease of access and to load them easily
+
+```{r Setup, warning=FALSE, echo=FALSE}
+# Define the vector of package names
+PACKAGES <- c(
+  "xgboost",         # For the XGBoost (Extreme Gradient Boosting) method
+  "ggplot2",         # For data visualization
+  "plotly",          # For interactive plots and dynamic visualizations
+  "RColorBrewer",    # For predefined color palettes for better visualizations
+  "tidymodels",      # For a tidy modeling framework for machine learning workflows
+  "tidyverse",       # For a collection of packages for data manipulation and visualization
+  "finetune",        # For tools to fine-tune and optimize machine learning models
+  "themis",          # For dealing with class imbalance in machine learning models
+  "gprofiler2",      # For gene list functional enrichment and pathway analysis
+  "future",          # For parallel processing and scaling computations
+  "readr",           # For reading rectangular data files (e.g., CSV, TSV)
+  "smotefamily",     # For handling imbalanced datasets with SMOTE (Synthetic Minority Over-sampling Technique)
+  "data.table"       # For fast and memory-efficient data manipulation
+)
+
+
+# Use purrr::walk to load all packages
+purrr::walk(PACKAGES, library, character.only = TRUE)
+gc()
+plan("multisession", workers = 15)
+```
+
+## Managing the data to use
+
+```{r Data to use, warning=FALSE}
+# Load the data
+# Read the CPM table, set the first column as row names, and transpose the data
+ML_data <- read_csv("../../ALLDEGs/cpm_table_log_woHS_nobatch.csv") %>%
+  column_to_rownames(var = "...1") %>%  # Set first column as row names
+  t() %>%  # Transpose the data for easier handling
+  as_tibble(rownames = "sample")  # Convert to tibble and keep row names as a column
+
+# Load metadata for sample subtypes
+# Read the metadata file and rename the sample column for consistency
+samples_subtypes_explained <- read_csv("../../ALLDEGs/samples_subtypes_explained.csv") %>%
+  rename(sample = samples)  # Rename 'samples' column to 'sample'
+
+# Load tumor vs control metadata
+info_samples_Tumor_Control <- read_csv("../../ALLDEGs/info_samples_Tumor_Control.csv")
+
+# Merge and filter the data
+ML_data <- ML_data %>%
+  left_join(info_samples_Tumor_Control, by = "sample") %>%  # Join tumor/control info
+  filter(condition != "H") %>%  # Filter out samples with condition 'H'
+  left_join(samples_subtypes_explained, by = "sample") %>%  # Join subtype info
+  select(-c(...1.x, ...1.y, Cell_type, age, replicate, condition))  # Remove unnecessary columns
+
+# Convert to data frame and set sample as row names
+ML_data <- data.frame(ML_data)  # Convert tibble to data frame
+rownames(ML_data) <- ML_data$sample  # Set row names to 'sample'
+ML_data$sample <- NULL  # Remove the sample column
+
+# Identify indices of samples with 'Unknown' cell types
+unknown_indices <- which(ML_data$type == 'Unknown')  # Find 'Unknown' cell type indices
+table(ML_data$type)  # Display counts of each cell type
+
+# Clean up unnecessary variables to free memory
+rm(info_samples_Tumor_Control, samples_subtypes_explained)  # Remove temporary metadata
+```
+
+## Number coating
+
+```{r Current otimal way  }
+# Number encoding of categorical values
+# Specify the columns to be label encoded
+columns_to_encode <- c("type")
+
+# Create separate datasets based on 'Cell_type'
+# Create a new data frame without rows where 'Cell_type' is "Unknown"
+my_data_train <- subset(ML_data, type != "Unknown")
+# Create a separate dataset for rows where 'Cell_type' is "Unknown"
+Unknown_data <- subset(ML_data, type == "Unknown")
+
+# Convert specified columns to factor type
+my_data_train <- my_data_train %>% mutate_at(columns_to_encode, as.factor)  # Convert 'type' to factor
+Unknown_data <- Unknown_data %>% mutate_at(columns_to_encode, as.factor)  # Convert 'type' to factor in Unknown_data
+
+## Optional: Convert factors to numeric (commented out)
+# train_data_numeric <- my_data_train %>% mutate_at(columns_to_encode, as.numeric)  # Convert factors to numeric
+
+# Create a dictionary-like structure to store the levels of categorical variables
+## The order corresponds to the number (commented out)
+# my_levels <- list(Cell_type = levels(my_data_train$Cell_type))  # Store levels of 'Cell_type'
+
+# Clean up unnecessary variables to free memory
+rm(columns_to_encode)  # Remove the 'columns_to_encode' variable
+
+```
+
+## Split tidymodels 
+
+```{r Split tidymodels }
+set.seed(1234)
+# Create a data split
+#lables_train <- my_data_train$Cell_type
+
+# For K-fold cross validation
+data_split <- initial_split(my_data_train, strata = type, prop = 0.7)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+# For validation set
+#data_split <- initial_validation_split(my_data_train, strata = Cell_type,prop = c(0.7, 0.2))
+#train_data <- training(data_split)
+#validation_data <- validation(data_split)
+#test_data <- testing(data_split)
+
+# Create a recipe
+recipe <- recipe(type ~ ., data = train_data)  %>%
+  step_nzv(all_predictors()) %>%  # Remove zero-variance predictors
+  step_corr(all_predictors(), threshold = 0.9) %>%  # Remove highly correlated predictors
+  step_smote(type,over_ratio = 1)
+
+# Perform cross-validation
+#cv_folds <- vfold_cv(train_data, strata = type, v = 3, repeats = 2)
+cv_folds <- mc_cv(train_data, prop = 3/4, times = 5, strata = type)
+
+# set metrics 
+class_metrics <- metric_set(accuracy, kap)
+
+```
+
+# Random Forest with ranger
+
+```{r RF with cross validation from tidymodels}
+# Seed for reproducibility
+set.seed(1235)
+
+# Model specification with ranger engine
+rf_spec <- rand_forest(min_n = tune(), 
+                       trees = 500, 
+                       mtry = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("ranger", importance = "impurity")
+
+# Extract parameter set and finalize
+draft <- extract_parameter_set_dials(rf_spec) %>% finalize(train_data)
+
+# Define the search grid for tuning
+tree_grid <- grid_space_filling(draft, size = 20)
+
+# Create the tuning workflow
+tuned_rf_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(rf_spec)
+
+# First tuning process with grid search
+tune_1 <- tune_grid(tuned_rf_workflow,
+                    resamples = cv_folds,
+                    grid = tree_grid)
+
+# Visualize initial tuning results
+autoplot(tune_1, metric = "accuracy")
+
+# Simulated annealing tuning process
+#tune_2 <- tune_sim_anneal(tuned_rf_workflow,
+#                          resamples = cv_folds,
+#                          iter = 30,
+#                         initial = tune_1,
+#                          metrics = class_metrics,
+#                          control = control_sim_anneal(save_workflow = FALSE))
+
+# Visualize simulated annealing results
+#autoplot(tune_2, metric = "accuracy")
+
+# Collect tuning results and select the best hyperparameters
+tuning_results <- show_best(tune_1, metric = "accuracy")
+tuning_results
+best_params <- tune_1 %>% select_best(metric = "accuracy")
+
+# Finalize the model with the best hyperparameters
+rf_model_final <- finalize_model(x = rf_spec, parameters = best_params)
+
+# Fit the model
+rf_fit <- rf_model_final %>% last_fit(recipe, split = data_split)
+
+#rm(rf_spec, draft, tree_grid, tuned_rf_workflow, tuning_results, best_params, rf_model_final)
+```
+
+## Results RF
+
+```{r Plots for RF}
+
+# Set seed for reproducibility
+set.seed(1234)
+
+# Extract predictions from the trained random forest model
+predictions <- extract_workflow(rf_fit) %>%
+  predict(new_data = test_data) %>% # Generate predictions on the test data
+  dplyr::mutate(type = test_data$type) # Add true cell type to predictions
+
+# Create a confusion matrix to evaluate model performance
+confusion <- conf_mat(predictions, truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion) # Summarize confusion matrix metrics
+metrics_df # Display metrics
+
+# Visualize confusion matrix as a heatmap
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap")
+
+# Extract variable importance from the random forest model
+rf_tree <- extract_fit_engine(rf_fit) # Extract the fitted model
+RF_var_importance <- 
+  data.frame(importance = ranger::importance(rf_tree)) %>% # Get variable importance
+  dplyr::mutate(Ens_id = rownames(.)) %>% # Add Ensembl IDs as a new column
+  dplyr::arrange(desc(importance)) # Sort by importance in descending order
+
+# Convert Ensembl IDs to gene names
+imp_gene_names <- gconvert(query = RF_var_importance$Ens_id, organism = "hsapiens", 
+         target = "ENSG", mthreshold = Inf, filter_na = TRUE)
+
+# Update importance dataframe with gene names and descriptions
+RF_var_importance$Ens_id <- imp_gene_names$name
+RF_var_importance$description <- imp_gene_names$description
+
+# Define thresholds for categorizing variable importance
+high_threshold <- max(RF_var_importance$importance) * 0.5
+medium_threshold <- max(RF_var_importance$importance) * 0.2
+
+# Categorize variable importance values into Small, Medium, and High
+RF_var_importance$Category <- cut(RF_var_importance$importance,
+                     breaks = c(0, medium_threshold, high_threshold, Inf),
+                     labels = c("Small", "Medium", "High"))
+
+# Create a bar plot of the top 25 variable importances
+RF_var_importance <- fread("RF_tuned_importance.csv")
+RF_imp_plot <- ggplot(head(RF_var_importance, 25), aes(x = importance, y = reorder(Ens_id, importance), fill = Category)) +
+  geom_bar(stat = "identity") + # Use bar chart to display importance
+  scale_fill_manual(values = c("lightcoral", "lightgreen", "skyblue")) +  # Choose colors for each category
+  labs(title = "Variable Importance Plot RF nonHS AGE", x = "Importance", y = "Variable") +
+  theme_minimal() + # Use classic theme for clean appearance
+  theme(axis.text.y = element_text(size = 10), # Customize y-axis text size
+        plot.title = element_text(size = 15), # Customize plot title size
+        legend.position = "right") + # Position the legend on the right
+  guides(fill = guide_legend(reverse = TRUE, title.position = "top")) # Reverse legend order
+ggsave(filename = "Variable_Importance_Plot_RF_nonHS_AGE.png", plot = RF_imp_plot, dpi = 300,bg = "white")
+
+
+# Make predictions on unknown data
+RF_results <- data.frame(predict(extract_workflow(rf_fit), new_data = Unknown_data))
+rownames(RF_results) <- rownames(Unknown_data) # Assign row names
+
+# Write results to CSV files
+write.csv(RF_results, "RF_tuned_results.csv", row.names = TRUE) # Save predictions
+write.csv(RF_var_importance, "RF_tuned_importance.csv", row.names = TRUE) # Save variable importance
+write.csv(metrics_df, "RF_tuned_metrics.csv", row.names = TRUE) # Save confusion matrix metrics
+
+# View the prediction results
+RF_results
+
+# Clean up the workspace by removing unnecessary objects
+#rm(predictions, confusion, high_threshold, medium_threshold)
+
+```
+
+# K-Nearest Neighbors (KNN) Model
+
+```{r KKNN with CV}
+set.seed(1234)
+
+# Define the model specification with the engine
+Knn_spec <- nearest_neighbor(weight_func = "optimal",
+              dist_power = tune(),
+              neighbors = tune()) %>% #14	0.2425053
+  set_mode("classification") %>%
+  set_engine("kknn")
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(Knn_spec) %>%
+  finalize(train_data)
+
+# Define the search grid for tuning
+Knn_grid <- grid_space_filling(draft,size = 25)
+
+# Create the tuning workflow
+tuned_knn_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(Knn_spec) 
+
+tune_1 <- tune_grid(tuned_knn_workflow,resamples = cv_folds, grid = Knn_grid)
+
+tune_2 <- tune_sim_anneal(tuned_knn_workflow,resamples = cv_folds, iter = 30, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_2, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_2 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+Knn_model_final <- finalize_model(x = Knn_spec, parameters = best_params)
+
+# Fit the model
+Knn_fit <- Knn_model_final %>%
+  last_fit(recipe,split = data_split)
+```
+
+## Results KNN
+
+```{r plots for KKNN}
+# Extract predictions
+predictions <- extract_workflow(Knn_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap KNN")
+
+# Make predictions
+KNN_results <- data.frame(predict(extract_workflow(Knn_fit), new_data = Unknown_data))
+rownames(KNN_results) <- rownames(Unknown_data)
+
+write.csv(KNN_results, "KNN_results.csv", row.names = T)
+write.csv(metrics_df, "KNN_tuned_metrics.csv", row.names = T)
+
+# View the results
+KNN_results
+```
+
+# XGBoost (Extreme Gradient Boosting)
+
+```{r Use xgb with CV}
+set.seed(1234)
+# Define the model specification with the ranger engine
+xgb_spec <- boost_tree(mtry = tune(),
+                       trees = 500,
+                       min_n = tune(),
+                       tree_depth = tune(),
+                       loss_reduction = tune()
+                       ) %>% 
+  set_engine("xgboost", stop_iter = 5) %>% 
+  set_mode("classification") 
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(xgb_spec) %>%
+  finalize(train_data)
+
+# Define the search grid for tuning
+xgb_grid <- grid_space_filling(draft,size = 25)
+
+# Create the tuning workflow
+tuned_xgb_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(xgb_spec)
+
+tune_1 <- tune_grid(tuned_xgb_workflow,resamples = cv_folds, grid = xgb_grid)
+
+#tune_2 <- tune_sim_anneal(tuned_xgb_workflow, resamples = cv_folds, iter = 30, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_1, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_1 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+xgb_model_final <- finalize_model(x = xgb_spec, parameters = best_params)
+
+# Fit the model
+xgb_fit <- xgb_model_final %>%
+  last_fit(recipe,split = data_split)
+extract_workflow(xgb_fit)
+```
+
+## Results XGB
+
+```{r plot xgb }
+set.seed(1234)
+# Extract predictions
+predictions <- extract_workflow(xgb_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# Visualize confusion matrix as a heatmap
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap")
+
+xgb_tree <- extract_fit_engine(xgb_fit)
+
+# Plot xgb
+#xgb.plot.tree(model = xgb_tree,show_node_id = T,trees = 0:2)
+# plot importance
+importance_matrix <- xgb.importance(model = xgb_tree )
+print(importance_matrix)
+
+# Convert to gene names
+imp_gene_names <- gconvert(query = importance_matrix$Feature, organism = "hsapiens", 
+         target="ENSG", mthreshold = Inf, filter_na = TRUE)
+
+importance_matrix$Feature <- imp_gene_names$name
+importance_matrix$description <- imp_gene_names$description
+# Plot the importance
+#importance_matrix <- fread("XGB_tuned_importance_matrix.csv")
+xgb_importance <- xgb.ggplot.importance(importance_matrix = importance_matrix, top_n = 25, n_clusters = 4,rel_to_first = F) + 
+  ggtitle("Feature Importance XGBoost nonHS AGE")
+# Save the plot with high DPI
+ggsave(filename = "Variable_Importance_Plot_XGB_nonHS_AGE.png", plot = xgb_importance, dpi = 300,bg = "white")
+
+# Make predictions
+XGB_results <- data.frame(predict(extract_workflow(xgb_fit), new_data = Unknown_data))
+rownames(XGB_results) <- rownames(Unknown_data)
+# Save results
+write.csv(XGB_results,"XGB_tuned_results.csv", row.names = T)
+write.csv(importance_matrix,"XGB_tuned_importance_matrix.csv", row.names = T)
+# mtry <- 69	min_n <- 2	loss <- 9.019757e-08
+write.csv(metrics_df,"XGB_tuned_metrics.csv", row.names = T)
+
+# View the results
+XGB_results
+
+```
+
+# Neural Network as MLP
+## Bagged Neural Network with Baguette(nnet)
+
+```{r Neural Network }
+set.seed(1234)
+library(baguette)
+mlp_spec <- bag_mlp(penalty = tune(),
+                    epochs = 200,
+                    hidden_units = 9) %>%
+  set_engine("nnet") %>% 
+  set_mode("classification")# %>% 
+  #translate()
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(mlp_spec) %>%
+  finalize(train_data)
+# Define the search grid for tuning
+mlp_grid <- grid_space_filling(draft,size = 15)
+
+# Create the tuning workflow
+tuned_mlp_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(mlp_spec)
+
+tune_1 <- tune_grid(tuned_mlp_workflow,resamples = cv_folds, grid = mlp_grid)
+
+#tune_2 <- tune_sim_anneal(tuned_mlp_workflow, resamples = cv_folds, iter = 30, initial = tune_1)
+
+# Collect tuning results
+tuning_results <- show_best(tune_1, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_1 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+mlp_model_final <- finalize_model(x = mlp_spec, parameters = best_params)
+
+# Fit the model
+mlp_fit <- mlp_model_final %>%
+  last_fit(recipe,split = data_split)
+bagged_nnet_model <- extract_workflow(mlp_fit)
+bagged_nnet_imp <- bagged_nnet_model$fit$fit$fit$imp
+```
+
+## Neural Network brulee
+
+```{r Neural Network }
+set.seed(1234)
+
+# Libraries
+library(torch)
+library(brulee)
+
+# Model Specification with brulee engine
+mlp_spec <- mlp(hidden_units = c(128, 64, 32, 16), 
+                penalty = tune(), 
+                epochs = tune(), 
+                learn_rate = tune(), 
+                activation = c("relu", "selu", "gelu","relu")) %>% 
+  set_mode("classification") %>% 
+  set_engine("brulee", stop_iter = 5)
+
+# Parameter Tuning
+draft <- extract_parameter_set_dials(mlp_spec) %>% 
+  finalize(train_data)
+
+# Search Grid
+mlp_grid <- grid_space_filling(draft, size = 30, type = "latin_hypercube")
+
+# Workflow
+tuned_mlp_workflow <- workflow() %>% 
+  add_recipe(recipe) %>% 
+  add_model(mlp_spec)
+
+# Tune Grid
+tune_1 <- tune_grid(tuned_mlp_workflow, resamples = cv_folds, grid = mlp_grid)
+
+# Collect Best Hyperparameters
+best_params <- select_best(tune_1, metric = "accuracy")
+
+# Ensure 'best_epoch' is an integer
+best_params$epochs <- as.integer(best_params$epochs)
+
+# Finalize Model with Best Hyperparameters
+mlp_model_final <- finalize_model(mlp_spec, best_params)
+
+# Fit the Final Model
+mlp_fit <- mlp_model_final %>% 
+  last_fit(recipe, split = data_split)
+
+extract_workflow(mlp_fit)
+```
+
+### results Bagged Neural Network with Baguette or Brulee
+
+```{r}
+set.seed(1234)
+# Extract predictions
+predictions <- extract_workflow(mlp_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+#library("NeuralNetTools")
+#nnet_model <- extract_fit_engine(mlp_fit)
+
+# Plot the neural network
+#plotnet(nnet_model)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap nnet")
+
+# Extract variable importance from the bagged nnet model
+
+bagged_nnet_imp_2 <- bagged_nnet_imp %>% 
+  dplyr::rename(Ens_id = term, importance = value) %>% 
+  dplyr::arrange(desc(importance))  # Sort by importance in descending order
+
+
+# Convert Ensembl IDs to gene names
+imp_gene_names <- gconvert(query = bagged_nnet_imp_2$Ens_id, organism = "hsapiens", 
+         target = "ENSG", mthreshold = Inf, filter_na = TRUE)
+
+# Update importance dataframe with gene names and descriptions
+bagged_nnet_imp_2$Ens_id <- imp_gene_names$name
+bagged_nnet_imp_2$description <- imp_gene_names$description
+
+#bagged_nnet_imp_2 <- head(bagged_nnet_imp_2, 25)
+
+# Define thresholds for categorizing variable importance
+high_threshold <- max(bagged_nnet_imp_2$importance) * 0.7
+medium_threshold <- max(bagged_nnet_imp_2$importance) * 0.5
+
+# Categorize variable importance values into Small, Medium, and High
+bagged_nnet_imp_2$Category <- cut(bagged_nnet_imp_2$importance,
+                     breaks = c(0, medium_threshold, high_threshold, Inf),
+                     labels = c("Small", "Medium", "High"))
+
+
+# Create a bar plot of the top 25 variable importances
+B_nnet_imp_plot <- ggplot(head(bagged_nnet_imp_2, 25), aes(x = importance, y = reorder(Ens_id, importance), fill = Category)) +
+  geom_bar(stat = "identity") + # Use bar chart to display importance
+  scale_fill_manual(values = c("lightcoral", "lightgreen", "skyblue")) +  # Choose colors for each category
+  labs(title = "Variable Importance Plot B_nnet HS AGE Batch", x = "Importance", y = "Variable") +
+  theme_minimal() + # Use classic theme for clean appearance
+  theme(axis.text.y = element_text(size = 10), # Customize y-axis text size
+        plot.title = element_text(size = 15), # Customize plot title size
+        legend.position = "right") + # Position the legend on the right
+  guides(fill = guide_legend(reverse = TRUE, title.position = "top")) # Reverse legend order
+ggsave(filename = "Variable_Importance_Plot_B_nnet_HS_AGE_Batch.png", plot = B_nnet_imp_plot, dpi = 300,bg = "white")
+
+# Make predictions
+mlp_results <- data.frame(predict(extract_workflow(mlp_fit), new_data = Unknown_data))
+rownames(mlp_results) <- rownames(Unknown_data)
+
+write.csv(mlp_results, "Mlp_results.csv", row.names = T)
+write.csv(metrics_df, "Mlp_tuned_metrics.csv", row.names = T)
+write.csv(bagged_nnet_imp_2, "Mlp_tuned_importance.csv", row.names = T)
+
+# View the results
+mlp_results
+```
+
+# SVM linear
+
+```{r  SVM linear}
+set.seed(1234)
+# Define the model specification with the ranger engine
+svm_linear <-
+  svm_linear(
+    cost = tune(),
+    margin = tune()) %>%  
+  set_engine("kernlab") %>% 
+  set_mode("classification")
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(svm_linear) %>%
+  finalize(train_data)
+# Define the search grid for tuning
+SVM_grid <- grid_space_filling(draft,size = 15)
+
+# Create the tuning workflow
+tuned_svm_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(svm_linear)
+
+tune_1 <- tune_grid(tuned_svm_workflow,resamples = cv_folds, grid = SVM_grid,control =  control_grid(verbose = TRUE))
+
+#tune_2 <- tune_sim_anneal(tuned_svm_workflow, resamples = cv_folds, iter = 25, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_1, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_1 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+svm_model_final <- finalize_model(x = svm_linear, parameters = best_params)
+
+# Fit the model
+svm_fit <- svm_model_final %>%
+  last_fit(recipe,split = data_split)
+
+extract_workflow(svm_fit)
+
+```
+
+## results SVM linear
+
+```{r  results SVM linear}
+set.seed(1234)
+
+# Extract predictions
+predictions <- extract_workflow(svm_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+svm_model <- extract_fit_engine(svm_fit)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap SVM")
+
+# Make predictions
+svm_results <- data.frame(predict(extract_workflow(svm_fit), new_data = Unknown_data))
+rownames(svm_results) <- rownames(Unknown_data)
+
+write.csv(svm_results, "SVM_linear_results.csv", row.names = T)
+write.csv(metrics_df, "SVM_linear_tuned_metrics.csv", row.names = T)
+
+
+# View the results
+svm_results
+
+```
+
+# LDA
+
+```{r}
+set.seed(1234)
+
+library(discrim)
+
+discrim_linear <- 
+  discrim_linear(penalty = tune()) %>% 
+  set_engine("mda") 
+
+# Define the search grid for tuning
+draft <-extract_parameter_set_dials(discrim_linear) %>%
+  finalize(train_data)
+# Define the search grid for tuning
+discrim_linear_grid <- grid_space_filling(draft,size = 25)
+
+# Create the tuning workflow
+tuned_discrim_linear_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(discrim_linear)
+
+tune_1 <- tune_grid(tuned_discrim_linear_workflow,resamples = cv_folds, grid = discrim_linear_grid)
+
+# Visualize initial tuning results
+autoplot(tune_1, metric = "accuracy")
+
+#tune_2 <- tune_sim_anneal(tuned_discrim_linear_workflow, resamples = cv_folds, iter = 30, initial = tune_1, metrics = class_metrics)
+
+# Collect tuning results
+tuning_results <- show_best(tune_1, metric = "accuracy")
+tuning_results
+
+# Select the best hyperparameters
+best_params <- tune_1 %>%
+  select_best(metric = "accuracy")
+
+# Finalize the model
+discrim_linear_model_final <- finalize_model(x = discrim_linear, parameters = best_params)
+
+# Fit the model
+discrim_linear_fit <- discrim_linear_model_final %>%
+  last_fit(recipe,split = data_split)
+
+```
+
+## results discrim_linear
+
+```{r}
+set.seed(1234)
+
+# Extract predictions
+predictions <- extract_workflow(discrim_linear_fit) %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+discrim_linear_model <- extract_fit_engine(discrim_linear_fit)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Heatmap LDA")
+
+# Make predictions
+discrim_linear_results <- data.frame(predict(extract_workflow(discrim_linear_fit), new_data = Unknown_data))
+rownames(discrim_linear_results) <- rownames(Unknown_data)
+
+write.csv(discrim_linear_results, "discrim_linear_results.csv", row.names = T)
+write.csv(metrics_df, "discrim_linear_tuned_metrics.csv", row.names = T)
+
+
+# View the results
+discrim_linear_results
+```
+
+# Dotplot metrics
+
+```{r prepare_metrics}
+# Process RandomForest metrics
+RF_tuned_metrics <- read_csv("RF_tuned_metrics.csv") %>%
+  select(-1, -.estimator) %>%
+  t() %>%
+  as.data.frame() %>%
+  `rownames<-`(NULL) %>%
+  setNames(.[1, ]) %>%
+  slice(-1) %>%
+  mutate(Model = "Random Forest") %>%
+  as_tibble()
+
+# Process XGB metrics
+XGB_tuned_metrics <- read_csv("XGB_tuned_metrics.csv") %>%
+  select(-1, -.estimator) %>%
+  t() %>%
+  as.data.frame() %>%
+  `rownames<-`(NULL) %>%
+  setNames(.[1, ]) %>%
+  slice(-1) %>%
+  mutate(Model = "XGBoost") %>%
+  as_tibble()
+
+# Process SVM metrics
+SVM_tuned_metrics <- read_csv("SVM_linear_tuned_metrics.csv") %>%
+  select(-1, -.estimator) %>%
+  t() %>%
+  as.data.frame() %>%
+  `rownames<-`(NULL) %>%
+  setNames(.[1, ]) %>%
+  slice(-1) %>%
+  mutate(Model = "SVM") %>%
+  as_tibble()
+
+# Process LDA metrics
+LDA_tuned_metrics <- read_csv("discrim_linear_tuned_metrics.csv") %>%
+  select(-1, -.estimator) %>%
+  t() %>%
+  as.data.frame() %>%
+  `rownames<-`(NULL) %>%
+  setNames(.[1, ]) %>%
+  slice(-1) %>%
+  mutate(Model = "LDA") %>%
+  as_tibble()
+
+# Unite all tibbles together
+all_metrics <- bind_rows(RF_tuned_metrics,LDA_tuned_metrics,SVM_tuned_metrics,XGB_tuned_metrics)
+
+# Ensure that the necessary columns are numeric
+library(dplyr)
+
+all_metrics <- all_metrics %>%
+  mutate(across(c(bal_accuracy, kap, f_meas), as.numeric)) %>%
+  rename(`Balanced accuracy` = bal_accuracy,`F-score` = f_meas,`Kappa` = kap) %>%
+  select(Model, `F-score`, Kappa, `Balanced accuracy`, everything()) %>%
+  arrange(-`F-score`)
+
+all_metrics
+
+write.csv(all_metrics,"Metrics_nonHS_AGE.csv")
+
+```
+
+## print plot
+```{r dot_plot}
+dot_plot <- all_metrics %>% 
+  pivot_longer(cols = c(`Kappa`, `F-score`), 
+               names_to = "metric", values_to = "value") %>%
+  ggplot(aes(x = value, y = metric, color = Model, group = Model)) + 
+  geom_jitter(size = 3, alpha = 0.8, height = 0.005) +  # Add vertical jitter to avoid overlap
+  labs(title = "Model Performance Metrics nonHS AGE", x = "Metric", y = "Value") + 
+  theme_minimal(base_size = 10) + 
+  theme(legend.position = "top") + 
+  scale_color_brewer(palette = "Dark2")
+# Save the plot with high DPI
+ggsave(filename = "Metrics_plot_nonHS_AGE.png", plot = dot_plot, dpi = 300,bg = "white")
+print(dot_plot)
+```
