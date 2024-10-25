@@ -1,0 +1,14 @@
+"",".metric",".estimator",".estimate"
+"1","accuracy","binary",0.969135802469136
+"2","kap","binary",0.798080518509286
+"3","sens","binary",0.88
+"4","spec","binary",0.976588628762542
+"5","ppv","binary",0.758620689655172
+"6","npv","binary",0.989830508474576
+"7","mcc","binary",0.800696437797523
+"8","j_index","binary",0.856588628762542
+"9","bal_accuracy","binary",0.928294314381271
+"10","detection_prevalence","binary",0.0895061728395062
+"11","precision","binary",0.758620689655172
+"12","recall","binary",0.88
+"13","f_meas","binary",0.814814814814815
