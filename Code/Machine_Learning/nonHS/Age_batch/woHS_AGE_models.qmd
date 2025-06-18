@@ -1,0 +1,1324 @@
+---
+title: "HS Subtype models"
+author: "ThomThom"
+format: html
+editor: source
+---
+
+# Preparatory steps
+
+Loading packages Store package names in a vectors for ease of access and to load them easily
+
+```{r Setup, echo=FALSE, warning=FALSE}
+
+# Define the vector of package names needed for the project
+PACKAGES <- c(
+  "xgboost",         # Extreme Gradient Boosting algorithm for classification/regression
+  "ggplot2",         # Data visualization package based on the grammar of graphics
+  "RColorBrewer",    # Color palettes for enhanced data visualization
+  "tidymodels",      # Tidy modeling framework for machine learning workflows
+  "tidyverse",       # Collection of packages for data manipulation, analysis, and visualization
+  "finetune",        # Tools for model tuning and optimization
+  "themis",          # Techniques for handling class imbalance in machine learning
+  "gprofiler2",      # Gene enrichment and pathway analysis for gene lists
+  "future",          # Enables parallel processing for faster computations
+  "smotefamily",     # Synthetic Minority Over-sampling Technique for imbalanced data
+  "data.table",      # High-performance data manipulation package
+  "gt",              # For creating display tables
+  #"gtsummary",       # For summary tables with statistics and formatted output
+  "butcher",         # Reduces memory load of models by removing unnecessary objects
+  "UBL",              # Utility-based learning techniques for imbalanced data
+  "ranger",
+  "kernelshap",
+  "shapviz"
+)
+
+# Use purrr::walk to load all packages
+purrr::walk(PACKAGES, library, character.only = TRUE)
+gc()
+
+plan(multisession, workers = 10)
+nbrOfWorkers()
+
+RANDOM_SEED <- 1234
+#plan("multisession", workers = 15,)
+#plan(multisession, workers = 15)
+#plan(sequential)
+
+
+```
+
+## Managing the data to use
+
+```{r Data to use, warning=FALSE}
+# Load the data
+# Read the CPM table, set the first column as row names, and transpose the data
+ML_data <- fread("../../ALLDEGs/PCA_cpm_log_woHS_89_filtered.csv")
+# Convert Ensembl IDs to gene names
+gene_names <- gconvert(query = ML_data$V1, organism = "hsapiens", 
+         target = "ENSG", mthreshold = Inf, filter_na = TRUE)
+#ML_data$V1 == gene_names$target
+
+ML_data$V1 <- gene_names$name
+
+#ML_data$V1 <- gene_names$name
+ML_data <- ML_data %>%
+  tibble() %>%
+  column_to_rownames(var = "V1") %>%  # Set first column as row names
+  t() %>%  # Transpose the data for easier handling
+  as_tibble(rownames = "sample")  # Convert to tibble and keep row names as a column
+
+# Load validation data
+ML_validation <- fread("../../ALLDEGs/cpm_table_log_30.csv") 
+# Convert Ensembl IDs to gene names
+gene_names <- gconvert(query = ML_validation$V1, organism = "hsapiens", 
+         target = "ENSG", mthreshold = Inf, filter_na = TRUE)
+
+ML_validation$V1 <- gene_names$name
+
+ML_validation <- ML_validation %>%
+  tibble() %>%
+  distinct(V1, .keep_all = TRUE) %>%
+  column_to_rownames(var = "V1") %>%  # Set first column as row names
+  t() %>%  # Transpose the data for easier handling
+  as_tibble(rownames = "sample")  # Convert to tibble and keep row names as a column
+
+# Load metadata for sample subtypes
+# Read the metadata file and rename the sample column for consistency
+samples_70_explained <- read_csv("../../ALLDEGs/info_samples_70.csv") %>%
+  tibble() %>%
+  select(-...1) 
+
+samples_30_explained <- read_csv("../../ALLDEGs/info_samples_30.csv") |>
+  tibble() |>
+  select(-...1)
+
+# Merge and filter the data 70
+ML_data <- ML_data %>%
+  left_join(samples_70_explained, by = "sample") %>%  # Join tumor/control info
+  filter(condition != "H") %>%  # Filter out samples with condition 'H'
+  select(-c(Cell_type, age, replicate, condition))  # Remove unnecessary columns
+
+# Convert to data frame and set sample as row names
+ML_data <- data.frame(ML_data)  # Convert tibble to data frame
+rownames(ML_data) <- ML_data$sample  # Set row names to 'sample'
+ML_data$sample <- NULL  # Remove the sample column
+
+# Merge and filter the data 30
+ML_validation <- ML_validation %>%
+  left_join(samples_30_explained, by = "sample") %>%  # Join tumor/control info
+  filter(condition != "H") %>%  # Filter out samples with condition 'H'
+  select(-c(Cell_type, age, replicate, condition))  # Remove unnecessary columns
+
+# Convert to data frame and set sample as row names
+ML_validation <- data.frame(ML_validation)  # Convert tibble to data frame
+rownames(ML_validation) <- ML_validation$sample  # Set row names to 'sample'
+ML_validation$sample <- NULL  # Remove the sample column
+
+# Identify indices of samples with 'Unknown' cell types
+unknown_indices <- which(ML_data$type == 'Unknown')  # Find 'Unknown' cell type indices
+table(ML_data$type)  # Display counts of each cell type
+
+#fake_data <- read_csv("output/tables/fake_data_FM_downsampled.csv") |>  filter(type != "PreB")
+#fake_data <- read_csv("output/tables/fake_data.csv") |>  filter(type != "PreB")
+#colnames(fake_data) <- colnames(ML_data)
+#ML_data <- rbind(ML_data, fake_data)
+
+# Clean up unnecessary variables to free memory
+#rm(info_samples_Tumor_Control, samples_subtypes_explained)  # Remove temporary metadata
+
+
+```
+
+## Number coating
+
+```{r Encode and Split  }
+# Number encoding of categorical values
+# Specify the columns to be label encoded
+columns_to_encode <- c("type")
+
+# Create separate datasets based on 'type'
+# Create a new data frame without rows where 'type' is "Unknown"
+my_data_train <- subset(ML_data, type != "Unknown")
+# Create a separate dataset for rows where 'type' is "Unknown"
+Unknown_data <- subset(ML_data, type == "Unknown")
+
+# Convert specified columns to factor type
+my_data_train <- my_data_train %>% mutate_at(columns_to_encode, as.factor)  # Convert 'type' to factor
+Unknown_data <- Unknown_data %>% mutate_at(columns_to_encode, as.factor)  # Convert 'type' to factor in Unknown_data
+
+# Get the levels from ML_data
+common_levels <- levels(my_data_train$type)
+
+# Set the levels
+ML_validation$type <- factor(ML_validation$type, levels = common_levels)
+
+# Split the data
+#data_split <- initial_split(my_data_train, strata = type, prop = 0.7)
+#train_data <- training(data_split)
+#test_data <- testing(data_split)
+
+# Clean up unnecessary variables to free memory
+rm(columns_to_encode)  # Remove the 'columns_to_encode' variable
+
+```
+
+## Split tidymodels
+
+```{r Split tidymodels }
+
+set.seed(RANDOM_SEED)
+
+# === Train/Test Split ===
+train_data <- my_data_train
+test_data  <- ML_validation
+
+cli::cli_h3("\n[INFO] Train ML data before NCL:\n")
+print(table(train_data$type))
+
+# === Advanced Class Balancing using UBL ===
+# Apply ADASYN oversampling
+train_data <- AdasynClassif(type ~ ., train_data, beta = 0.1,k = 5,baseClass = "pediatric")
+cli::cli_h3("\n[INFO] Train ML data after Adasyn:\n")
+print(table(train_data$type))
+train_data <- NCLClassif(type ~ ., train_data,k = 5) #,Cl = c("B", "PreT", "T"),
+cli::cli_h3("\n[INFO] Train ML data after NCL:\n")
+print(table(train_data$type))
+
+train_data <- train_data |> mutate(Weights = hardhat::importance_weights(as.integer(type)))
+
+# === Preprocessing Recipe ===
+recipe <- recipe(type ~ ., data = train_data) 
+
+recipe_mlp <- recipe(type ~ ., data = train_data) |>
+  step_normalize(all_predictors())
+
+
+# === Recipe Prep and Bake ===
+rec_prep   <- prep(recipe, training = train_data)
+baked_data <- bake(rec_prep, new_data = NULL)
+
+cli::cli_h3("\n[INFO] Baked (final) ML training data:\n")
+print(table(baked_data$type))
+
+# === Cross-validation Splits ===
+#v_folds <- vfold_cv(train_data, strata = type, v = 2, repeats = 3)
+v_folds <- vfold_cv(train_data, v = 5, repeats = 3, strata = type)
+#nested_cv(data = train_data)
+
+# === Evaluation Metrics ===
+class_metrics <- metric_set(bal_accuracy, mcc, accuracy, f_meas, kap, roc_auc)
+
+
+```
+
+
+# Random Forest:
+
+```{r RF with cross validation from tidymodels}
+set.seed(RANDOM_SEED)
+
+# Step 1: Define RF specification with tunable hyperparameters
+rf_spec <- 
+  rand_forest(
+    min_n = tune(),
+    trees = tune(),
+    mtry = tune()
+  ) %>%
+  set_mode("classification") %>%
+  set_engine("ranger", importance = "permutation") |> #permutation
+  translate()
+
+# Step 2: Define full parameter search space
+rf_param_space <- extract_parameter_set_dials(rf_spec) %>%
+  finalize(train_data) %>%
+  update(
+    min_n = min_n(range = c(1L, 15L)),
+    trees = trees(range = c(100L, 1000L)),
+    mtry = mtry(range = c(5L, 89L)) # Adjust to your feature space
+  )
+
+# Step 3: Create initial space-filling grid
+rf_grid <- grid_space_filling(rf_param_space, size = 20, type = "latin_hypercube")
+
+# Step 4: Build tuning workflow
+rf_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(rf_spec) |>
+  add_case_weights(col = Weights)
+
+# Step 5: Run tuning (grid → annealing → bayes)
+rf_tune_grid <- tune_grid(
+  rf_workflow,
+  resamples = v_folds,
+  grid = rf_grid,
+  metrics = class_metrics
+)
+
+rf_tune_anneal <- tune_sim_anneal(
+  rf_workflow,
+  resamples = v_folds,
+  initial = rf_tune_grid,
+  param_info = rf_param_space,
+  iter = 15,
+  metrics = class_metrics,
+  control = control_sim_anneal(verbose_iter = T,no_improve = 10)
+)
+
+rf_tune_bayes <- tune_bayes(
+  rf_workflow,
+  resamples = v_folds,
+  initial = rf_tune_anneal,
+  param_info = rf_param_space,
+  iter = 15,
+  metrics = class_metrics,
+  control = control_bayes(no_improve = 5, verbose_iter = TRUE)
+)
+
+# Step 6: Inspect best MCC
+show_best(rf_tune_bayes, metric = "mcc")
+
+# Step 7: Select best by MCC or mcc
+rf_best_params <- select_best(rf_tune_bayes, metric = "bal_accuracy")
+
+# Step 8: Finalize and fit
+final_rf_workflow <- finalize_workflow(rf_workflow, rf_best_params)
+
+rf_fit <- fit(final_rf_workflow, data = train_data)
+
+# Step 9: Print model and optionally butcher
+print(rf_fit)
+```
+
+## Results RF
+
+```{r Plots for RF}
+# Set seed for reproducibility
+set.seed(RANDOM_SEED)
+
+# Fit the model to resamples (this is what stacks needs)
+RF_res <- fit_resamples(
+  final_rf_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+collect_metrics(RF_res)
+
+# Extract predictions from the trained random forest model
+predictions <- rf_fit %>%
+  predict(new_data = test_data) %>% # Generate predictions on the test data
+  dplyr::mutate(type = test_data$type) # Add true cell type to predictions
+
+# Create a confusion matrix to evaluate model performance
+confusion <- conf_mat(predictions, truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion) # Summarize confusion matrix metrics
+metrics_df # Display metrics
+
+# Visualize confusion matrix as a heatmap
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - RF HS Subtype Batch Heatmap")
+
+write_csv(metrics_df, "output/tables/RF_tuned_metrics.csv")
+
+```
+
+
+# K-Nearest Neighbors (KNN) Model:
+
+```{r KKNN with CV}
+set.seed(RANDOM_SEED)
+
+# Define KNN model spec with tuneable neighbors only
+knn_spec <- nearest_neighbor(
+  weight_func = "optimal",
+  neighbors = tune()
+) %>%
+  set_mode("classification") %>%
+  set_engine("kknn") |>
+  translate()
+
+# Extract parameter space and finalize for train_data
+knn_param_space <- extract_parameter_set_dials(knn_spec) %>%
+  finalize(train_data) |>
+  update(neighbors = neighbors(c(2L,89L)) )
+
+# Generate a smaller, efficient Latin hypercube grid for tuning
+knn_grid <- grid_space_filling(knn_param_space, size = 30, type = "latin_hypercube")
+
+# Build the workflow
+knn_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(knn_spec)
+
+# Step 1: Tune with grid search
+knn_tune_grid <- tune_grid(
+  knn_workflow,
+  resamples = v_folds,
+  grid = knn_grid,
+  metrics = class_metrics,
+  control = control_grid(save_pred = TRUE)
+)
+
+# Show top tuning results by MCC
+best_knn_results <- show_best(knn_tune_grid, metric = "mcc")
+print(best_knn_results)
+
+# Select best hyperparameters
+best_knn_params <- select_best(knn_tune_grid, metric = "mcc")
+
+# Finalize workflow with best params and fit on full training data
+final_knn_workflow <- finalize_workflow(knn_workflow, best_knn_params)
+
+knn_fit <- fit(final_knn_workflow, data = train_data)
+
+print(knn_fit)
+
+
+# Save lighter model
+#cleaned_KNN <- butcher(Knn_fit, verbose = TRUE)
+
+```
+
+## Results KNN
+
+```{r plots for KKNN}
+set.seed(RANDOM_SEED)
+
+knn_res <- fit_resamples(
+  final_knn_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+collect_metrics(knn_res)
+
+# Extract predictions
+predictions <- knn_fit %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# View the confusion matrix
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - KNN(8) HS Subtype Batch Heatmap ")
+
+write_csv(metrics_df, "output/tables/KNN_tuned_metrics.csv")
+
+```
+
+# XGBoost (Extreme Gradient Boosting):
+
+```{r Use xgb with CV}
+
+set.seed(RANDOM_SEED)
+# Define the model specification with the ranger engine
+xgb_spec <- boost_tree(
+  mtry = tune(),            # number of predictors to sample
+  trees = tune(),           # number of boosting iterations
+  min_n = tune(),           # minimum number of data points in a node
+  tree_depth = tune(),      # maximum depth of each tree
+  learn_rate = tune(),      # shrinkage parameter
+  sample_size = tune()      # subsample ratio
+) %>%
+  set_engine("xgboost", objective = "binary:logistic") %>%
+  set_mode("classification") |>
+  translate()
+
+xgb_param_space <- extract_parameter_set_dials(xgb_spec) %>%
+  update(
+    trees = trees(c(100L, 1000L)),
+    tree_depth = tree_depth(c(3, 10)),
+    mtry = mtry(c(5, 89)),
+    min_n = min_n(c(2, 20)),
+    sample_size = sample_prop(c(0.5, 1.0))
+  )
+
+xgb_grid <- grid_space_filling(xgb_param_space, size = 25, type = "latin_hypercube")
+
+xgb_workflow <- workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(xgb_spec) |>
+  add_case_weights(col = Weights)
+
+xgb_tune_grid <- tune_grid(
+  xgb_workflow,
+  resamples = v_folds,
+  grid = xgb_grid,
+  param_info = xgb_param_space,
+  metrics = class_metrics
+)
+
+xgb_tune_bayes <- tune_bayes(
+  xgb_workflow,
+  resamples = v_folds,
+  initial = xgb_tune_grid,
+  param_info = xgb_param_space,
+  iter = 25,
+  metrics = class_metrics,
+  control = control_bayes(no_improve = 10, verbose = TRUE)
+)
+
+show_best(xgb_tune_bayes, metric = "mcc")
+
+xgb_best_params <- select_best(xgb_tune_bayes, metric = "mcc")
+
+xgb_final_workflow <- finalize_workflow(xgb_workflow, xgb_best_params)
+
+xgb_fit <- fit(xgb_final_workflow, data = train_data)
+
+# Show summary of workflow
+print(xgb_fit)
+# Save lighter model
+#cleaned_XGB <- butcher(xgb_fit, verbose = TRUE)
+
+```
+
+## Results XGBoost
+
+```{r plot xgb }
+set.seed
+
+# Fit the model to resamples (this is what stacks needs)
+XGB_res <- fit_resamples(
+  xgb_final_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+collect_metrics(XGB_res)
+
+# Extract predictions
+predictions <- xgb_fit %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions,truth = type, estimate = .pred_class)
+metrics_df <- summary(confusion)
+metrics_df
+
+# Visualize confusion matrix as a heatmap
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - XGB HS Subtype Batch Heatmap")
+
+write_csv(metrics_df,"output/tables/XGB_tuned_metrics.csv")
+
+
+```
+
+# SVM
+## SVM RBF
+
+```{r}
+set.seed(RANDOM_SEED)
+#class_metrics <- metric_set(bal_accuracy,mcc, accuracy, f_meas, kap, roc_auc)
+# Define the model specification with SVM and RBF kernel
+svm_spec <- svm_rbf(
+  cost = tune(),       # Cost parameter (C)
+  rbf_sigma = tune(),   # Sigma parameter for RBF kernel
+  margin = tune()
+) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_grid <- extract_parameter_set_dials(svm_spec) %>%
+  #finalize(train_data) %>%
+  grid_space_filling(size = 25, type = "latin_hypercube")
+
+# Create the workflow
+svm_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(svm_spec) # |>   add_case_weights(col = Weights)
+
+# Perform initial grid tuning
+tune_grid_results <- tune_grid(
+  svm_workflow,
+  resamples = v_folds, 
+  grid = svm_grid,
+  metrics = class_metrics,
+  control = control_grid(save_pred = TRUE)
+)
+
+# Further refinement with simulated annealing
+tune_sa_results <- tune_sim_anneal(
+  svm_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of simulated annealing iterations
+  initial = tune_grid_results,
+  metrics = class_metrics,
+  control = control_sim_anneal(no_improve = 10, verbose = F)
+)
+
+# Bayesian optimization tuning to refine the search
+tune_bayes_results <- tune_bayes(
+  svm_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of Bayesian iterations
+  initial = tune_sa_results,
+  metrics = class_metrics,
+  control = control_bayes(no_improve = 5)
+)
+
+
+
+# Create tuning visualization
+autoplot(tune_bayes_results) +
+  theme_minimal() +
+  labs(title = "SVM with RBF Kernel - Hyperparameter Tuning Results")
+
+# Select the best hyperparameters
+best_params <- select_best(tune_bayes_results, metric = "mcc") # "mcc" "bal_accuracy"
+print(best_params)
+
+# Finalize the workflow with the best parameters
+final_svm_rbf_workflow <- finalize_workflow(svm_workflow, best_params)
+
+# Fit the model on training data
+svm_rbf_fit <- final_svm_rbf_workflow %>%
+  fit(data = train_data)
+
+svm_rbf_fit <- final_svm_rbf_workflow  %>%
+  fit(data = train_data)
+
+# Print summary of the fitted workflow
+print(svm_rbf_fit)
+
+# Save lighter model using butcher
+#cleaned_svm_rbf <- butcher(svm_rbf_fit, verbose = TRUE)
+
+```
+
+
+### Metrics
+```{r}
+set.seed(RANDOM_SEED)
+
+# Fit the model to resamples (this is what stacks needs)
+SVM_rbf_res <- fit_resamples(
+  final_svm_rbf_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+collect_metrics(SVM_rbf_res)
+
+# Extract predictions from test data
+predictions <- svm_rbf_fit %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions, truth = type, estimate = .pred_class)
+print(confusion)
+
+# Get detailed metrics
+metrics_df <- summary(confusion)
+print(metrics_df)
+
+# Visualize confusion matrix
+autoplot(confusion, type = "heatmap") +
+  #theme_void() +
+  labs(title = "Confusion Matrix - SVM-RBF Subtype Batch Heatmap")
+
+# Save metrics to CSV
+write_csv(metrics_df, "output/tables/SVM_RBF_tuned_metrics.csv")
+
+```
+
+## SVM linear
+
+```{r}
+set.seed(RANDOM_SEED)
+
+# Define the model specification with SVM Linear kernel
+svm_linear_spec <- svm_linear(
+  cost = tune(),       # Cost parameter (C)
+  margin = tune()      # Margin parameter
+) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+# Use the Latin hypercube sampling approach you preferred
+svm_grid <- extract_parameter_set_dials(svm_linear_spec) %>%
+  #finalize(train_data) %>%  # Uncomment if needed for specific values
+  grid_space_filling(size = 25, type = "latin_hypercube")
+
+# Create the workflow
+svm_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(svm_linear_spec) #|>   add_case_weights(col = Weights)
+
+# Perform initial grid tuning
+tune_grid_results <- tune_grid(
+  svm_workflow,
+  resamples = v_folds, 
+  grid = svm_grid,
+  metrics = class_metrics,
+  control = control_grid(save_pred = TRUE)
+)
+
+# Show initial results
+initial_results <- show_best(tune_grid_results, metric = "mcc", n = 5)
+print(initial_results)
+
+
+# Further refinement with simulated annealing
+tune_sa_results <- tune_sim_anneal(
+  svm_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of simulated annealing iterations
+  initial = tune_grid_results,
+  metrics = class_metrics,
+  control = control_sim_anneal(no_improve = 8)
+)
+
+
+# Bayesian optimization tuning to refine the search
+tune_bayes_results <- tune_bayes(
+  svm_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of Bayesian iterations
+  initial = tune_sa_results,
+  metrics = class_metrics,
+  control = control_bayes(no_improve = 5)
+)
+
+
+# Collect and display final tuning results
+tuning_results <- show_best(tune_bayes_results, metric = "mcc", n = 10)
+print(tuning_results)
+
+# Create tuning visualization
+autoplot(tune_bayes_results) +
+  theme_minimal() +
+  labs(title = "SVM with Linear Kernel - Hyperparameter Tuning Results")
+
+# Select the best hyperparameters
+best_params <- select_best(tune_sa_results, metric = "bal_accuracy") # bal_accuracy mcc
+print(best_params)
+
+# Finalize the workflow with the best parameters
+final_svm_linear_workflow <- finalize_workflow(svm_workflow, best_params)
+
+# Fit the model on training data
+svm_linear_fit <- final_svm_linear_workflow %>%
+  fit(data = train_data)
+
+# Print summary of the fitted workflow
+print(svm_linear_fit)
+
+# Save lighter model using butcher
+cleaned_svm_linear <- butcher(svm_linear_fit, verbose = TRUE) 
+
+```
+
+
+### Metrics
+```{r}
+# Extract predictions from test data
+predictions <- svm_linear_fit %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions, truth = type, estimate = .pred_class)
+print(confusion)
+
+# Get detailed metrics
+metrics_df <- summary(confusion)
+print(metrics_df)
+
+# Visualize confusion matrix
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - SVM-Linear Subtype Batch Heatmap")
+
+# Save metrics to CSV
+write_csv(metrics_df, "output/tables/SVM_Linear_tuned_metrics.csv")
+
+# Fit the model to resamples (this is what stacks needs)
+SVM_linear_res <- fit_resamples(
+  final_svm_linear_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+collect_metrics(SVM_linear_res)
+
+```
+
+# LASSO
+
+```{r}
+
+set.seed(RANDOM_SEED)
+
+# Define the model specification with LASSO
+lasso_spec <- multinom_reg(
+  penalty = tune(),      # Regularization parameter
+  mixture = 1          # 1 = LASSO, 0 = Ridge, values between = Elastic Net
+) %>%
+  set_mode("classification") %>%
+  set_engine("glmnet")
+
+# Use the Latin hypercube sampling approach for the penalty parameter
+lasso_grid <- extract_parameter_set_dials(lasso_spec) %>%
+  #finalize(train_data) %>%  # Uncomment if needed for specific values
+  grid_space_filling(size = 20, type = "latin_hypercube")
+
+# Create the workflow
+lasso_workflow <- 
+  workflow() %>%
+  add_recipe(recipe) %>%
+  add_model(lasso_spec) |>
+  add_case_weights(col = Weights)
+
+# Perform initial grid tuning
+tune_grid_results <- tune_grid(
+  lasso_workflow,
+  resamples = v_folds, 
+  grid = lasso_grid,
+  metrics = class_metrics,
+  control = control_grid(save_pred = TRUE)
+)
+
+# Show initial results
+initial_results <- show_best(tune_grid_results, metric = "mcc", n = 5)
+print(initial_results)
+
+# Further refinement with simulated annealing
+tune_sa_results <- tune_sim_anneal(
+  lasso_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of simulated annealing iterations
+  initial = tune_grid_results,
+  metrics = class_metrics,
+  control = control_sim_anneal(no_improve = 10)
+)
+
+
+# Bayesian optimization tuning to refine the search
+tune_bayes_results <- tune_bayes(
+  lasso_workflow,
+  resamples = v_folds,
+  iter = 15,              # Number of Bayesian iterations
+  initial = tune_sa_results,
+  metrics = class_metrics,
+  control = control_bayes(no_improve = 5, verbose_iter = T)
+)
+
+
+# Collect and display final tuning results
+tuning_results <- show_best(tune_bayes_results, metric = "mcc", n = 10)
+print(tuning_results)
+
+# Create tuning visualization
+autoplot(tune_bayes_results) +
+  theme_minimal() +
+  labs(title = "LASSO Model - Hyperparameter Tuning Results")
+
+# Select the best hyperparameters
+best_params <- select_best(tune_bayes_results, metric = "mcc")
+print(best_params)
+
+# Finalize the workflow with the best parameters
+final_lasso_workflow <- finalize_workflow(lasso_workflow, best_params)
+
+# Fit the model on training data
+lasso_fit <- final_lasso_workflow %>%
+  fit(data = train_data)
+
+# Print summary of the fitted workflow
+print(lasso_fit)
+
+# Save lighter model using butcher
+cleaned_lasso <- butcher(lasso_fit, verbose = TRUE) 
+
+```
+
+
+## Metrics
+```{r}
+
+# Extract predictions from test data
+predictions <- lasso_fit %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Create a confusion matrix
+confusion <- conf_mat(predictions, truth = type, estimate = .pred_class)
+print(confusion)
+
+# Get detailed metrics
+metrics_df <- summary(confusion)
+print(metrics_df)
+
+# Visualize confusion matrix
+autoplot(confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - LASSO Subtype Batch Heatmap")
+
+# Save metrics to CSV
+write_csv(metrics_df, "LASSO_tuned_metrics.csv")
+
+# Fit the model to resamples (this is what stacks needs)
+LASSO_res <- fit_resamples(
+  final_lasso_workflow,
+  resamples = v_folds,
+  metrics = class_metrics,
+  control = control_resamples(save_pred = TRUE, save_workflow = TRUE)
+)
+
+```
+
+
+# STACK models
+```{r}
+# Now you can use this for stacking
+# First, load the stacks library if not already loaded
+set.seed(RANDOM_SEED)
+library(stacks)
+
+# Initialize a model stack
+model_stack <- stacks() %>%
+  add_candidates(LASSO_res) %>%
+  add_candidates(knn_res) |>
+  add_candidates(SVM_linear_res) %>%
+  add_candidates(SVM_rbf_res) %>%
+  add_candidates(RF_res) %>%
+  add_candidates(XGB_res) %>%
+  blend_predictions(
+    metric = metric_set(mcc),
+    times = 200,                    # Increase for stability
+    control = control_grid(
+      verbose = TRUE,
+      save_pred = TRUE          
+    )
+  ) %>%
+  fit_members()
+
+#saveRDS(object = model_stack,file = "model_stack.RDS")
+
+# Visualize the model weights
+autoplot(model_stack, type = "performance")
+autoplot(model_stack, type = "weights")
+autoplot(model_stack, type = "members")
+
+# Now you can make predictions with the stack on new data
+stack_preds <- model_stack %>%
+  predict(new_data = test_data) %>%
+  mutate(type = test_data$type)
+
+# Evaluate stack performance
+stack_confusion <- conf_mat(stack_preds, truth = type, estimate = .pred_class)
+stack_metrics <- summary(stack_confusion)
+stack_metrics
+
+# Visualize confusion matrix for the stacked model
+autoplot(stack_confusion, type = "heatmap") +
+  labs(title = "Confusion Matrix - Stacked Model for HS Subtype Classification")
+
+# Save metrics
+write_csv(stack_metrics, "output/tables/stacked_model_metrics.csv")
+
+
+Cleaned_stack <- butcher(model_stack,verbose = T)
+
+```
+
+
+# Dotplot metrics
+
+```{r prepare_metrics}
+library(tidyverse)
+
+# Define a function to process metrics files
+process_metrics <- function(file, model_name) {
+  read_csv(file) %>%
+    select(-.estimator) %>%
+    t() %>%
+    as.data.frame() %>%
+    `rownames<-`(NULL) %>%
+    setNames(.[1, ]) %>%
+    slice(-1) %>%
+    mutate(Model = model_name) %>%
+    as_tibble()
+}
+
+# List of all metrics files and their corresponding model names
+metrics_files <- list(
+  "output/tables/RF_tuned_metrics.csv" = "RF",
+  #"output/tables/Mlp_tuned_metrics.csv" = "MLP",
+  "output/tables/KNN_tuned_metrics.csv" = "KNN(8)",
+  "output/tables/XGB_tuned_metrics.csv" = "XGBoost",
+  "output/tables/SVM_RBF_tuned_metrics.csv" = "SVM RBF",
+  "output/tables/SVM_Linear_tuned_metrics.csv" = "SVM Linear",
+  "output/tables/LASSO_tuned_metrics.csv" = "LASSO",
+  "output/tables/stacked_model_metrics.csv" = "STACKED (all models)"
+)
+
+# Process all files and combine
+all_metrics <- map2_dfr(names(metrics_files), metrics_files, process_metrics) %>%
+  mutate(across(c(bal_accuracy, kap, f_meas, mcc), as.numeric)) %>%
+  select(-ppv) |>
+  mutate(UN_mcc = (mcc + 1) / 2) |>
+  select(Model, mcc, everything()) %>%
+  arrange(desc(mcc)) %>%
+  mutate(across(where(is.numeric), ~ signif(.x, 3)))
+
+all_metrics
+
+# Save results
+write_csv(all_metrics, "Metrics_woHS_AGE.csv")
+
+```
+
+```{r}
+library(ggsci)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Your data wrangling
+plot_data <- all_metrics %>%
+  select(Model, f_meas, mcc, bal_accuracy) %>%
+  mutate(Model = reorder(Model, mcc)) %>%  # Order by MCC
+  pivot_longer(cols = c(f_meas, mcc, bal_accuracy),
+               names_to = "Metric", values_to = "Value") %>%
+  mutate(Label = sprintf("%.2f", Value)) %>%
+  mutate(Metric = recode(Metric,
+                         "f_meas" = "F1 Score",
+                         "mcc" = "Matthews Correlation Coefficient",
+                         "bal_accuracy" = "Balanced Accuracy"))
+
+# Plot
+HS_simple_bar <- ggplot(plot_data, aes(x = Model, y = Value, fill = Metric)) +
+  geom_col(position = position_dodge(0.7), width = 0.6) +
+  geom_text(aes(label = Label), position = position_dodge(0.7), vjust = -0.5, size = 4.5) +
+  scale_fill_npg() +
+  labs(title = "woHS Age Models Performances", 
+       y = "Score", 
+       fill = "Metric") +
+  theme_bw(base_size = 15) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.position = "top") +
+  scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.2))
+
+print(HS_simple_bar)
+
+ggsave("output/figures/woHS_simple_bar_AGE.png", plot = HS_simple_bar, width = 12, height = 8, dpi = 600, bg = "white")
+```
+
+
+## More plots
+```{r prepare_metrics}
+
+library(ggplot2)
+library(ggrepel)  # For non-overlapping text labels
+
+# Select only the columns we need
+plot_data_scatter <- all_metrics %>%
+  select(Model, f_meas, UN_mcc)
+
+# Create the scatter plot
+HS_scatter <- ggplot(plot_data_scatter, aes(x = f_meas, y = UN_mcc, color = Model)) +
+  geom_point(size = 4) +
+  scale_color_npg() +  # from ggsci
+  geom_text_repel(aes(label = Model), size = 4, seed = 1234,nudge_x = -0.03 ) +  # Labels next to dots
+  labs(title = "F1 Score vs. Matthews Correlation Coefficient (UN) woHS Age",
+       x = "F1 Score",
+       y = "MCC (UN)") +
+  theme_bw(base_size = 14) +
+  theme(plot.title = element_text(hjust = 0.5, face = "bold"),
+        legend.position = "none")
+
+# Show plot
+print(HS_scatter)
+
+# Optional: Save to file
+ggsave("output/figures/woHS_scatter_F1_vs_MCC.png", plot = HS_scatter, width = 10, height = 8, dpi = 600, bg = "white")
+
+```
+
+# Utilities
+## Calibration
+```{r}
+
+calibrate_and_save <- function(model, test_data, model_name,method) {
+  library(tailor)
+  library(probably)
+  library(dplyr)
+  library(readr)
+  library(ggplot2)
+  
+  set.seed(RANDOM_SEED)
+  
+  # Predict class and probabilities
+  class_preds <- predict(model, new_data = test_data, type = "class")
+  prob_preds <- predict(model, new_data = test_data, type = "prob")
+  
+  # Combine predictions and true labels
+  predictions <- bind_cols(class_preds, prob_preds) %>%
+    mutate(truth = test_data$type) %>%
+    rename(predicted = .pred_class)
+  
+  # Build and fit calibration model (e.g., isotonic)
+  post_obj <- tailor() %>% adjust_probability_calibration(method = method)
+  post_res <- fit(post_obj, predictions, outcome = truth, estimate = predicted, probabilities = starts_with(".pred_"))
+  
+  # Get calibrated probabilities
+  calibrated_probs <- predict(post_res, predictions, type = "prob")
+  
+  # Confusion matrix and metrics summary
+  confusion <- conf_mat(calibrated_probs, truth = truth, estimate = predicted)
+  metrics_df <- summary(confusion)
+  print(metrics_df)
+  # Plot confusion heatmap
+  print(autoplot(confusion, type = "heatmap"))
+  
+  # Save metrics and calibration model files
+  write_csv(metrics_df, file = paste0("output/tables/Tailored_", model_name, "_metrics.csv"))
+  saveRDS(list(post_res = post_res, model = model), 
+        file = paste0("output/objects/", model_name, "_tailor.RDS"))
+  
+  # Return metrics and calibration model object
+  list(metrics = metrics_df, calibration_model = post_res)
+}
+
+# isotonic beta
+XGB_results <- calibrate_and_save(xgb_fit, test_data, "XGB","logistic")
+
+RF_results <- calibrate_and_save(rf_fit, test_data, "RF","isotonic")
+#results <- calibrate_and_save(xgb_fit, test_data, "XGB")
+
+SVMrbf_results <- calibrate_and_save(svm_rbf_fit, test_data, "SVMrbf","beta")
+
+SVMlinear_results <- calibrate_and_save(svm_linear_fit, test_data, "SVMlinear","isotonic")
+
+LASSO_results <- calibrate_and_save(lasso_fit, test_data, "LASSO","logistic")
+
+KKNN_results <- calibrate_and_save(knn_fit, test_data, "KKNN","logistic")
+
+Stack_results <- calibrate_and_save(model_stack, test_data, "Stack","isotonic")
+
+```
+
+# SHAP 
+## RF
+```{r}
+library(ranger)
+set.seed(1)
+
+x <- train_data[-ncol(train_data)]
+stratified_subset <- train_data %>%
+  initial_split(prop = 100 / nrow(train_data), strata = type) %>%
+  training() |>
+  select(-type)
+
+# Step 1: Calculate Kernel SHAP values
+library(doFuture)
+registerDoFuture()
+plan(multisession, workers = 15)
+SHAP_kernel_RF <- kernelshap(extract_fit_engine(rf_fit), x, bg_X = stratified_subset) pred_fun
+
+# Step 2: Turn them into a shapviz object
+SHAP_viz_RF <- shapviz(SHAP_kernel_RF, interactions = TRUE)
+
+# Save SHAP importance (beeswarm plot) as PNG with 600 DPI and a title
+plot_beeswarm <- sv_importance(SHAP_viz_RF, show_numbers = TRUE, kind = "beeswarm") & theme_bw(base_size = 15)
+plot_beeswarm
+ggsave("SHAP/sv_importance_RF_Subtype_beeswarm.png", plot = plot_beeswarm, dpi = 600,width = 12,height = 8)
+
+# Save SHAP importance (default plot) as PNG with 600 DPI
+plot_default <- sv_importance(SHAP_viz_RF, show_numbers = TRUE,max_display = 15) +
+  ggtitle("SHAP Importance RF Subtype") + theme_bw(base_size = 20)
+plot_default
+ggsave("SHAP/sv_importance_RF_Subtype_default.png", plot = plot_default, dpi = 600,width = 12,height = 8)
+
+# Save SHAP dependence plot for 'EBF1' as PNG with 600 DPI
+plot_dependence <- sv_dependence(SHAP_viz_RF, v = "EBF1", color_var = "auto") & theme_bw(base_size = 15) # & geom_smooth(method = lm)
+plot_dependence
+ggsave("SHAP/sv_dependence_RF_Subtype_EBF1.png", plot = plot_dependence, dpi = 600,width = 12,height = 8)
+
+# Save SHAP waterfall plot as PNG with 600 DPI
+plot_waterfall <- sv_waterfall(SHAP_viz_RF) +
+  ggtitle("SHAP waterfall RF Subtype") & theme_bw(base_size = 15)
+plot_waterfall
+ggsave("SHAP/sv_waterfallRF_Subtype.png", plot = plot_waterfall, dpi = 600,width = 12,height = 8)
+
+```
+
+## XBGoost
+```{r}
+library(xgboost)
+library(kernelshap)
+library(shapviz)
+
+# Extract fitted xgboost model
+XGB <- extract_fit_engine(xgb_fit)
+
+# Prepare predictor matrix (should match training predictors)
+x <- baked_data
+x$type <- as.numeric(x$type) - 1  # assuming binary outcome for SHAP
+X_pred <- as.matrix(x %>% select(-c("type", "Weights")))  # this is what shapviz expects
+
+# Compute SHAP values with interaction effects
+SHAP_viz_XGB <- shapviz(XGB, X_pred = X_pred, X = X_pred, interactions = TRUE)
+
+
+# Save SHAP importance (default plot) as PNG with 600 DPI
+SHAP_XGB <- sv_importance(SHAP_viz_XGB, show_numbers = TRUE,max_display = 25) +
+  ggtitle("SHAP XGB importance woHS Age") + theme_bw(base_size = 15)
+
+SHAP_XGB
+
+ggsave(plot = SHAP_XGB,filename = "output/figures/SHAP_XGB_total.png", width = 12,height = 8,dpi = 600)
+
+SHAP_XGB_list <- SHAP_XGB[["data"]] |>
+  tibble()
+
+SHAP_XGB_list
+
+write_csv(x = SHAP_XGB_list,file = "output/tables/SHAP_XGB_woHS_Age.csv")
+```
+
+## MLP
+
+```{r}
+set.seed(RANDOM_SEED)
+library(baguette)
+
+x <- train_data[-ncol(train_data)]
+stratified_subset <- train_data %>%
+  initial_split(prop = 100 / nrow(train_data), strata = type) %>%
+  training() |>
+  select(-type)
+
+SHAP_kernel_NNET <- kernelshap(mlp_SHAP_fit, x, bg_X = stratified_subset,parallel = F,type = "prob")
+
+# Step 2: Turn them into a shapviz object
+SHAP_viz_NNET <- shapviz(SHAP_kernel_NNET, interactions = TRUE)
+
+# Save SHAP importance (beeswarm plot) as PNG with 600 DPI and a title
+plot_beeswarm <- sv_importance(SHAP_viz_NNET, show_numbers = TRUE, kind = "beeswarm") + theme_bw(base_size = 20)
+plot_beeswarm
+ggsave("SHAP/sv_importance_MLP_Subtype_beeswarm.png", plot = plot_beeswarm, dpi = 600,width = 12,height = 8)
+
+# Save SHAP importance (default plot) as PNG with 600 DPI
+plot_default <- sv_importance(SHAP_viz_NNET, show_numbers = TRUE) +
+  ggtitle("SHAP Importance MLP Subtype") + theme_bw(base_size = 20)
+plot_default
+ggsave("SHAP/sv_importance_MLP_Subtype_default.png", plot = plot_default, dpi = 600,width = 12,height = 8)
+
+# Save SHAP dependence plot for 'EBF1' as PNG with 600 DPI
+plot_dependence <- sv_dependence(SHAP_viz_NNET, v = "EBF1", color_var = "auto") + theme_bw(base_size = 20)
+plot_dependence
+ggsave("SHAP/sv_dependence_MLP_Subtype_EBF1.png", plot = plot_dependence, dpi = 600,width = 12,height = 8)
+
+# Save SHAP waterfall plot as PNG with 600 DPI
+plot_waterfall <- sv_waterfall(SHAP_viz_NNET) + theme_bw(base_size = 20)
+plot_waterfall
+ggsave("SHAP/sv_waterfall_MLP_Subtype.png", plot = plot_waterfall, dpi = 600,width = 12,height = 8)
+
+
+```
+
+
+## STACK
+
+```{r}
+set.seed(RANDOM_SEED)
+# Predict class labels from the stack
+stack_preds_train <- predict(model_stack, new_data = train_data) %>%
+  mutate(Cell_type_stack = .pred_class)
+
+# Merge with original features
+surrogate_data <- train_data %>%
+  mutate(Cell_type_stack = stack_preds_train$Cell_type_stack) |>
+  select(-type)
+
+head(stack_preds_train)
+
+library(xgboost)
+library(vip)
+library(shapviz)
+
+library(xgboost)
+
+# Design matrix
+X <- data.matrix(surrogate_data[, -ncol(surrogate_data)])
+y <- as.integer(surrogate_data$Cell_type_stack) - 1  # 0-indexed for XGB
+
+dtrain <- xgb.DMatrix(data = X, label = y)
+
+
+xgb_surrogate <- xgboost(
+  data = dtrain,
+  objective = "multi:softmax",
+  num_class = length(levels(surrogate_data$Cell_type_stack)),
+  nrounds = 2000,
+  eta = 1,
+  max_depth = 4,
+  verbosity = 0,
+  nthread = 10
+)
+
+
+# SHAP
+sv <- shapviz(xgb_surrogate, X_pred = X, X = as.data.frame(X))
+
+# Save SHAP importance (default plot) as PNG with 600 DPI
+SHAP_STACK <- sv_importance(sv, show_numbers = TRUE,max_display = 25) +
+  ggtitle("SHAP Stack importance subtype") + theme_bw(base_size = 15)
+
+SHAP_STACK$data <- SHAP_STACK$data |>
+  mutate(ind = recode(ind,
+                      "Class_1" = "B",
+                      "Class_2" = "PreB",
+                      "Class_3" = "PreT",
+                      "Class_4" = "T"))
+  
+
+SHAP_STACK
+
+ggsave(plot = SHAP_STACK,filename = "output/figures/Total_SHAP_stack.png", width = 12,height = 8,dpi = 600)
+
+SHAP_STACK_beeswarm <- sv_importance(sv, show_numbers = TRUE, kind = "beeswarm",) & theme_bw(base_size = 10)
+labels <- c("B", "PreB", "PreT", "T")
+SHAP_STACK_beeswarm[[1]]$labels$title <- "B"
+SHAP_STACK_beeswarm[[2]]$labels$title <- "PreB"
+SHAP_STACK_beeswarm[[3]]$labels$title <- "PreT"
+SHAP_STACK_beeswarm[[4]]$labels$title <- "T"
+# Now, `plot_beeswarm` should reflect the new titles per plot
+print(SHAP_STACK_beeswarm)
+
+ggsave(plot = SHAP_STACK_beeswarm,filename = "output/figures/SHAP_STACK_beeswarm.png", width = 12,height = 8,dpi = 600)
+
+SHAP_STACK_list <- SHAP_STACK[["data"]] |>
+  filter(ind == "B") |>
+  select(feature) |>
+  tibble()
+
+SHAP_STACK_list
+
+write_csv(x = SHAP_STACK_list, file = "output/tables/SHAP_STACK_list_25.csv")
+
+# VIP
+vip(xgb_surrogate, num_features = 20) + theme_bw(base_size = 12)
+
+importance_matrix <- xgb.importance(model = xgb_surrogate )
+xgb.ggplot.importance(importance_matrix = importance_matrix, top_n = 25, n_clusters = 3,rel_to_first = F) + 
+  ggtitle("Feature Importance XGBoost HS Subtype Batch") +
+  theme_bw(15)
+
+```

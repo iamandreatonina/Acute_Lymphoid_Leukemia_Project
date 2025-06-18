@@ -1,0 +1,14 @@
+.metric,.estimator,.estimate
+accuracy,multiclass,0.9335443037974683
+kap,multiclass,0.7772481621966365
+sens,macro,0.6972688570971014
+spec,macro,0.9518284856699221
+ppv,macro,0.7217327691465626
+npv,macro,0.948803767895579
+mcc,multiclass,0.777454016809519
+j_index,macro,0.6490973427670235
+bal_accuracy,macro,0.8245486713835117
+detection_prevalence,macro,0.25
+precision,macro,0.7217327691465623
+recall,macro,0.6972688570971014
+f_meas,macro,0.6967455998431141

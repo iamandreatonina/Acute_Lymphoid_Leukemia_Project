@@ -1,0 +1,14 @@
+.metric,.estimator,.estimate
+accuracy,binary,0.9272151898734177
+kap,binary,0.43780940594059403
+sens,binary,0.30303030303030304
+spec,binary,1
+ppv,binary,1
+npv,binary,0.9248366013071895
+mcc,binary,0.5293897576905253
+j_index,binary,0.303030303030303
+bal_accuracy,binary,0.6515151515151515
+detection_prevalence,binary,0.03164556962025317
+precision,binary,1
+recall,binary,0.30303030303030304
+f_meas,binary,0.4651162790697675
